@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
+from torch.nn.utils import prune
 from torch.utils.tensorboard import SummaryWriter
 import argparse
 import tqdm
@@ -24,22 +25,33 @@ if __name__ == "__main__":
     writer = SummaryWriter(log_dir=args.save)
 
     # Load CIFAR-10 dataset
-    transform = transforms.Compose(
-        [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+    transform_train = transforms.Compose(
+        [
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ]
+    )
+    transform_test = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ]
     )
 
     trainset = torchvision.datasets.CIFAR10(
-        root="~/Data/cifar10", train=True, download=True, transform=transform
+        root="~/Data/cifar10", train=True, download=True, transform=transform_train
     )
     trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=64, shuffle=True, num_workers=2
+        trainset, batch_size=128, shuffle=True, num_workers=2
     )
 
     testset = torchvision.datasets.CIFAR10(
-        root="~/Data/cifar10", train=False, download=True, transform=transform
+        root="~/Data/cifar10", train=False, download=True, transform=transform_test
     )
     testloader = torch.utils.data.DataLoader(
-        testset, batch_size=64, shuffle=False, num_workers=2
+        testset, batch_size=128, shuffle=False, num_workers=2
     )
 
     # Initialize the model, loss function, and optimizer
@@ -61,26 +73,29 @@ if __name__ == "__main__":
             else:
                 print("No initialization method specified")
         elif isinstance(m, nn.Linear):
-            if args.im == "xavier":
-                nn.init.xavier_normal_(m.weight, gain=nn.init.calculate_gain("relu"))
-            elif args.im == "kaiming_out":
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif args.im == "kaiming_in":
-                nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
-            elif args.im == "haocheng":
-                m.weight.data = torch.randn(m.weight.shape)
-                m.weight.data /= torch.linalg.norm(m.weight, ord=2)
-            else:
-                print("No initialization method specified")
+            m.weight.data = torch.randn(m.weight.shape)
+            m.weight.data /= torch.linalg.norm(m.weight, ord=2)
+            # if args.im == "xavier":
+            #     nn.init.xavier_normal_(m.weight, gain=nn.init.calculate_gain("relu"))
+            # elif args.im == "kaiming_out":
+            #     nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+            # elif args.im == "kaiming_in":
+            #     nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
+            # elif args.im == "haocheng":
+            #     m.weight.data = torch.randn(m.weight.shape)
+            #     m.weight.data /= torch.linalg.norm(m.weight, ord=2)
+            # else:
+            #     print("No initialization method specified")
         elif isinstance(m, nn.BatchNorm2d):
             m.weight.data.fill_(1)
             m.bias.data.zero_()
 
     if args.prune != 0.0:
-        for m in model.modules():
+        for name, m in model.named_modules():
             if isinstance(m, nn.Conv2d):
-                ifprune = torch.rand(m.weight.shape) > args.prune
-                m.weight.data[ifprune] = 0.0
+                prune.l1_unstructured(m, name="weight", amount=args.prune)
+                if m.bias is not None:
+                    prune.l1_unstructured(m, name="bias", amount=args.prune)
 
     if args.restore != 0.0:
         for m in model.modules():
@@ -89,16 +104,25 @@ if __name__ == "__main__":
                 m.weight.data /= torch.linalg.norm(
                     m.weight.view(m.weight.shape[0], -1), ord=2
                 )
+                m.weight.data *= args.restore
+                if args.prune != 0.0:
+                    m.weight_orig.data /= torch.linalg.norm(
+                        m.weight.view(m.weight.shape[0], -1), ord=2
+                    )
+                    m.weight_orig.data *= args.restore
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=0.0001)
+    optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+    # scheduler = optim.lr_scheduler.CyclicLR(
+    #     optimizer, base_lr=1e-3, max_lr=0.1, step_size_up=5, step_size_down=15
+    # )
     scheduler = optim.lr_scheduler.MultiStepLR(
-        optimizer, milestones=[80, 120], gamma=0.1
+        optimizer, milestones=[80, 120, 140], gamma=0.1
     )
 
     # Training loop
-    for epoch in tqdm.trange(175):
+    for epoch in tqdm.trange(160):
         running_loss = 0.0
         model.train()
         for i, data in enumerate(trainloader, 0):
