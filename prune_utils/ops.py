@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import numpy as np
+import scipy
 
 
 def get_lipz_fc(weight):
@@ -36,6 +38,30 @@ def get_lipz_conv_pi(weight, iter=50):
         x0 = x0 / torch.norm(x0)
     # calculate the spectral norm of the weight matrix
     return torch.norm(w.matmul(x0))
+
+
+def objective_function(var, spec_norm, W):
+    return spec_norm**2 / (0.5 * W * var) - 1
+
+
+def binary_search(
+    H, W, lower_bound=0, upper_bound=0.5, tolerance=1e-4, max_iterations=500
+):
+    for _ in range(max_iterations):
+        mid_point = (lower_bound + upper_bound) / 2.0
+        matrix = np.random.normal(0, mid_point, size=(H, W))
+        spec_norm = np.linalg.norm(matrix, ord=2)
+        f_value = objective_function(mid_point, spec_norm, W)
+
+        if abs(f_value) < tolerance:
+            return matrix  # mid_point
+
+        if f_value > 0:
+            upper_bound = mid_point
+        else:
+            lower_bound = mid_point
+
+    return matrix  # (lower_bound + upper_bound) / 2.0, matrix
 
 
 if __name__ == "__main__":
