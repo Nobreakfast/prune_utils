@@ -8,7 +8,6 @@ from torch.utils.tensorboard import SummaryWriter
 import argparse
 import tqdm
 import models.resnet as resnet
-from prune_utils.ops import binary_search
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -88,7 +87,7 @@ if __name__ == "__main__":
             # else:
             #     print("No initialization method specified")
         elif isinstance(m, nn.BatchNorm2d):
-            m.weight.data.fill_(1)
+            m.weight.data.fill_(0.33)
             m.bias.data.zero_()
 
     if args.prune != 0.0:
@@ -99,37 +98,19 @@ if __name__ == "__main__":
                     prune.l1_unstructured(m, name="bias", amount=args.prune)
 
     if args.restore != 0.0:
-        for m in model.modules():
+        for name, m in model.named_modules():
             if isinstance(m, nn.Conv2d):
-                # if m.weight.shape[0] < 100:
-                #     continue
-                # weight shape: in_channels, out_channels*k*k
-                # var, tmp = binary_search(
-                #     m.weight.shape[0],
-                #     m.weight.shape[1] * m.weight.shape[2] * m.weight.shape[3],
-                # )
-                # m.weight.data = torch.tensor(tmp, dtype=torch.float).reshape(
-                #     m.weight.shape
-                # )
-                # var = m.weight.data.var()
-                # spec_norm = torch.linalg.norm(
-                #     m.weight.view(m.weight.shape[0], -1).data, ord=2
-                # )
-                # res = spec_norm**2 / (
-                #     0.5
-                #     * m.weight.shape[1]
-                #     * m.weight.shape[2]
-                #     * m.weight.shape[3]
-                #     * var
-                # )
-                # print(var, spec_norm, res)
-                spec_norm = torch.linalg.norm(
-                    m.weight.view(m.weight.shape[0], -1).data, ord=2
+                # m.weight.data *= args.restore
+                m.weight.data /= torch.linalg.norm(
+                    m.weight.view(m.weight.shape[0], -1), ord=2
                 )
-                m.weight.data /= spec_norm
                 m.weight.data *= args.restore
                 if args.prune != 0.0:
-                    m.weight_orig.data = m.weight.data.clone()
+                    m.weight_orig.data /= torch.linalg.norm(
+                        m.weight.view(m.weight.shape[0], -1), ord=2
+                    )
+                    m.weight_orig.data *= args.restore
+                # find the bn after conv
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()

@@ -54,14 +54,14 @@ def binary_search(
         f_value = objective_function(mid_point, spec_norm, W)
 
         if abs(f_value) < tolerance:
-            return matrix  # mid_point
+            return mid_point, matrix
 
         if f_value > 0:
             upper_bound = mid_point
         else:
             lower_bound = mid_point
 
-    return matrix  # (lower_bound + upper_bound) / 2.0, matrix
+    return (lower_bound + upper_bound) / 2.0, matrix
 
 
 if __name__ == "__main__":
