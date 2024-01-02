@@ -11,6 +11,18 @@ import models.resnet as resnet
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
+def __getattr(model, name):
+    name_list = name.split(".")
+    ret = model
+    for n in name_list:
+        if n.isdigit():
+            ret = ret[int(n)]
+        else:
+            ret = getattr(ret, n)
+    return ret
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch CIFAR10 Training")
     parser.add_argument("-i", "--im", help="initialization method", default="")
@@ -73,8 +85,7 @@ if __name__ == "__main__":
             else:
                 print("No initialization method specified")
         elif isinstance(m, nn.Linear):
-            m.weight.data = torch.randn(m.weight.shape)
-            m.weight.data /= torch.linalg.norm(m.weight, ord=2)
+            nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
         elif isinstance(m, nn.BatchNorm2d):
             m.weight.data.fill_(1)
             m.bias.data.zero_()
@@ -92,20 +103,23 @@ if __name__ == "__main__":
                 spec_norm = torch.linalg.norm(
                     m.weight.view(m.weight.shape[0], -1), ord=2
                 )
-                m.weight.data /= spec_norm
-                m.weight.data *= args.restore
-                # the name of module is *.conv1 or *.conv2
-                # find the corresponding bn layer named *.bn1 or *.bn2
-                bn_name = name.replace("conv", "bn")
-                bn_layer = getattr(model, bn_name)
-                bn_layer.weight.data /= spec_norm
-                bn_layer.weight.data *= args.restore
+                if args.restore >= 1:
+                    m.weight.data /= spec_norm
+                if "conv" in name:
+                    bn_name = name.replace("conv", "bn")
+                    bn_layer = __getattr(model, bn_name)
+                    bn_layer.weight.data /= spec_norm
 
                 if args.prune != 0.0:
                     m.weight_orig.data /= torch.linalg.norm(
                         m.weight.view(m.weight.shape[0], -1), ord=2
                     )
-                    m.weight_orig.data *= args.restore
+            if isinstance(m, nn.Linear):
+                spec_norm = torch.linalg.norm(m.weight, ord=2)
+                if args.restore >= 1:
+                    m.weight.data /= spec_norm
+                # if args.prune != 0.0:
+                #     m.weight_orig.data /= torch.linalg.norm(m.weight, ord=2)
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()
@@ -118,7 +132,7 @@ if __name__ == "__main__":
     )
 
     # Training loop
-    for epoch in tqdm.trange(160):
+    for epoch in range(160):
         running_loss = 0.0
         model.train()
         for i, data in enumerate(trainloader, 0):
