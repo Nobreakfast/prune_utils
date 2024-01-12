@@ -100,16 +100,6 @@ class BasicBlock(nn.Module):
                     ),
                     nn.BatchNorm2d(self.expansion * planes),
                 )
-        spec_norm_conv1 = torch.linalg.norm(
-            self.conv1.weight.data.view(self.conv1.weight.data.size(0), -1), ord=2
-        ).item()
-        spec_norm_conv2 = torch.linalg.norm(
-            self.conv2.weight.data.view(self.conv2.weight.data.size(0), -1), ord=2
-        ).item()
-        # self.conv1.weight.data = self.conv1.weight.data / spec_norm_conv1
-        # self.conv2.weight.data = self.conv2.weight.data / spec_norm_conv2
-        self.bn1.weight.data = self.bn1.weight.data / spec_norm_conv1
-        self.bn2.weight.data = self.bn2.weight.data / spec_norm_conv2
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
@@ -131,15 +121,7 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
         self.fc = nn.Linear(64, num_classes)
 
-        #self.apply(_weights_init)
-        spec_norm_conv1 = torch.linalg.norm(
-            self.conv1.weight.data.view(self.conv1.weight.data.size(0), -1), ord=2
-        ).item()
-        # self.conv1.weight.data = self.conv1.weight.data / spec_norm_conv1
-        self.bn1.weight.data = self.bn1.weight.data / spec_norm_conv1
-        spec_norm_fc = torch.linalg.norm(self.fc.weight.data, ord=2).item()
-        self.fc.weight.data = self.fc.weight.data / (spec_norm_fc*125)
-        # self.apply(_weights_init)
+        self.apply(_weights_init)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)

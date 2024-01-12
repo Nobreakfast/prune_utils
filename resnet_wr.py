@@ -15,7 +15,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch CIFAR10 Training")
     parser.add_argument("-i", "--im", help="initialization method", default="")
     parser.add_argument("-s", "--save", help="save path", default="./logs/test")
-    parser.add_argument("-l", "--lr", help="learning rate", type=float, default=0.001)
+    parser.add_argument("-l", "--lr", help="learning rate", type=float, default=0.1)
     parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
     # parser.add_argument("-r", "--restore", help="restore rate", type=float, default=0.0)
 

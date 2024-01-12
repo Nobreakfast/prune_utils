@@ -51,46 +51,46 @@ if __name__ == "__main__":
                 name,
             ]
             lipz_tmp.append(
-                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2).item()
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1).T, ord=2).item()
             )
             ifprune = torch.rand(m.weight.shape) > 0.5
             m.weight.data[ifprune] = 0.0
             # m.weight.data *= 1.5
             lipz_tmp.append(
-                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2).item()
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1).T, ord=2).item()
             )
 
             nn.init.xavier_normal_(m.weight, gain=nn.init.calculate_gain("relu"))
             lipz_tmp.append(
-                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2).item()
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1).T, ord=2).item()
             )
             ifprune = torch.rand(m.weight.shape) > 0.5
             m.weight.data[ifprune] = 0.0
             # m.weight.data *= 1.5
             lipz_tmp.append(
-                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2).item()
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1).T, ord=2).item()
             )
 
             nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
             lipz_tmp.append(
-                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2).item()
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1).T, ord=2).item()
             )
             ifprune = torch.rand(m.weight.shape) > 0.5
             m.weight.data[ifprune] = 0.0
             # m.weight.data *= 1.5
             lipz_tmp.append(
-                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2).item()
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1).T, ord=2).item()
             )
 
             nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
             lipz_tmp.append(
-                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2).item()
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1).T, ord=2).item()
             )
             ifprune = torch.rand(m.weight.shape) > 0.5
             m.weight.data[ifprune] = 0.0
             # m.weight.data *= 1.5
             lipz_tmp.append(
-                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2).item()
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1).T, ord=2).item()
             )
 
             # haocheng init
@@ -99,13 +99,13 @@ if __name__ == "__main__":
                 m.weight.view(m.weight.shape[0], -1), ord=2
             )
             lipz_tmp.append(
-                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2).item()
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1).T, ord=2).item()
             )
             ifprune = torch.rand(m.weight.shape) > 0.5
             m.weight.data[ifprune] = 0.0
             # m.weight.data *= 1.5
             lipz_tmp.append(
-                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2).item()
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1).T, ord=2).item()
             )
 
             lipz.append(lipz_tmp)

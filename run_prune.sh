@@ -7,5 +7,5 @@ python resnet_pwr.py --save logs/resnet_pwr2_no.$num/ki_lr0.1s --lr 0.1 --prune 
 # python resnet_pwr.py --save logs/resnet_pwr3_no.$num/ki_lr0.1s --lr 0.1 --prune 0.95
 # code changed
 # res: none
-python resnet_pwr.py --save logs/resnet_pwr4_no.$num/ki_lr0.1s --lr 0.1 --prune 0.95 &
+python resnet_pwr.py --save logs/resnet_pwr4_no.$num/ki_lr0.1s --lr 0.1 --prune 0.95 
 

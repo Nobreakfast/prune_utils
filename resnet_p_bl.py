@@ -1,3 +1,4 @@
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -7,23 +8,20 @@ from torch.nn.utils import prune
 from torch.utils.tensorboard import SummaryWriter
 import argparse
 import tqdm
-import models.resnet_wobn as resnet
+import models.resnet as resnet
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch CIFAR10 Training")
+    parser.add_argument("-i", "--im", help="initialization method", default="")
     parser.add_argument("-s", "--save", help="save path", default="./logs/test")
-    parser.add_argument("-l", "--lr", help="learning rate", type=float, default=0.1)
-    parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
-    parser.add_argument("-r", "--restore", help="restore rate", type=float, default=0.0)
     parser.add_argument(
-        "-i",
-        "--im",
-        help="initialization method",
-        choices=["xavier", "kaiming_out", "kaiming_in", "haocheng"],
-        default="xavier",
+        "-l", "--load", help="load path", default="./logs/resnet/baseline/best.pth"
     )
+    parser.add_argument("-r", "--lr", help="learning rate", type=float, default=0.1)
+    parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
 
     args = parser.parse_args()
 
@@ -62,55 +60,19 @@ if __name__ == "__main__":
 
     # Initialize the model, loss function, and optimizer
     model = resnet.resnet20()
-    for m in model.modules():
-        if isinstance(m, nn.Conv2d):
-            if args.im == "xavier":
-                nn.init.xavier_normal_(m.weight, gain=nn.init.calculate_gain("relu"))
-            elif args.im == "kaiming_out":
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif args.im == "kaiming_in":
-                nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
-            elif args.im == "haocheng":
-                m.weight.data = torch.randn(m.weight.shape)
-                m.weight.data /= torch.linalg.norm(
-                    m.weight.view(m.weight.shape[0], -1), ord=2
-                )
-            else:
-                print("No initialization method specified")
+    model.load_state_dict(torch.load(args.load))
 
     if args.prune != 0.0:
         for name, m in model.named_modules():
             if isinstance(m, nn.Conv2d):
-                prune.random_unstructured(m, name="weight", amount=args.prune)
-            elif isinstance(m, nn.Linear):
-                prune.random_unstructured(m, name="weight", amount=args.prune)
-
-    if args.restore != 0.0:
-        print("restoring !!!!")
-        for m in model.modules():
-            if isinstance(m, nn.Conv2d):
-                spec_norm = torch.linalg.norm(
-                    m.weight.view(m.weight.shape[0], -1), ord=2
-                )
-                m.weight.data /= spec_norm
-                m.weight.data *= args.restore
-                if args.prune != 0.0:
-                    m.weight_orig.data /= spec_norm
-                    m.weight_orig.data *= args.restore
-            elif isinstance(m, nn.Linear):
-                spec_norm = torch.linalg.norm(m.weight, ord=2)
-                m.weight.data /= spec_norm
-                m.weight.data *= args.restore
-                if args.prune != 0.0:
-                    m.weight_orig.data /= spec_norm
-                    m.weight_orig.data *= args.restore
+                prune.L1Unstructured.apply(m, "weight", args.prune)
+                print(torch.sum(m.weight_mask))
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
-    # scheduler = optim.lr_scheduler.CyclicLR(
-    #     optimizer, base_lr=1e-3, max_lr=0.1, step_size_up=5, step_size_down=15
-    # )
+    optimizer = optim.SGD(
+        model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4
+    )
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[80, 120, 140], gamma=0.1
     )
@@ -166,11 +128,16 @@ if __name__ == "__main__":
         test_accuracy = 100 * correct_test / total_test
         if test_accuracy > best:
             best = test_accuracy
-            torch.save(model.state_dict(), args.save + "/best.pth")
+            torch.save(model.state_dict(), args.save + "/best_p.pth")
 
         writer.add_scalar("train accuracy", train_accuracy, epoch)
         writer.add_scalar("test accuracy", test_accuracy, epoch)
 
+    model.load_state_dict(torch.load(args.save + "/best_p.pth"))
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d):
+            prune.remove(m, "weight")
+    torch.save(model.state_dict(), args.save + "/best.pth")
     # Close TensorBoard writer
     writer.close()
     print("Finished Training")

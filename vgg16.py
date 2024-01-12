@@ -7,23 +7,18 @@ from torch.nn.utils import prune
 from torch.utils.tensorboard import SummaryWriter
 import argparse
 import tqdm
-import models.resnet_wobn as resnet
+import models.vgg16 as vgg16
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch CIFAR10 Training")
+    parser.add_argument("-i", "--im", help="initialization method", default="")
     parser.add_argument("-s", "--save", help="save path", default="./logs/test")
-    parser.add_argument("-l", "--lr", help="learning rate", type=float, default=0.1)
+    parser.add_argument("-l", "--lr", help="learning rate", type=float, default=0.001)
     parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
     parser.add_argument("-r", "--restore", help="restore rate", type=float, default=0.0)
-    parser.add_argument(
-        "-i",
-        "--im",
-        help="initialization method",
-        choices=["xavier", "kaiming_out", "kaiming_in", "haocheng"],
-        default="xavier",
-    )
+    parser.add_argument("-t", "--print", help="print accuracy", action="store_true")
 
     args = parser.parse_args()
 
@@ -61,7 +56,8 @@ if __name__ == "__main__":
     )
 
     # Initialize the model, loss function, and optimizer
-    model = resnet.resnet20()
+    model = vgg16.VGG16()
+
     for m in model.modules():
         if isinstance(m, nn.Conv2d):
             if args.im == "xavier":
@@ -77,16 +73,32 @@ if __name__ == "__main__":
                 )
             else:
                 print("No initialization method specified")
+        elif isinstance(m, nn.Linear):
+            # m.weight.data = torch.randn(m.weight.shape)
+            # m.weight.data /= torch.linalg.norm(m.weight, ord=2)
+            if args.im == "xavier":
+                nn.init.xavier_normal_(m.weight, gain=nn.init.calculate_gain("relu"))
+            elif args.im == "kaiming_out":
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+            elif args.im == "kaiming_in":
+                nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
+            elif args.im == "haocheng":
+                m.weight.data = torch.randn(m.weight.shape)
+                m.weight.data /= torch.linalg.norm(m.weight, ord=2)
+            else:
+                print("No initialization method specified")
+        elif isinstance(m, nn.BatchNorm2d):
+            m.weight.data.fill_(1)
+            m.bias.data.zero_()
 
     if args.prune != 0.0:
         for name, m in model.named_modules():
             if isinstance(m, nn.Conv2d):
-                prune.random_unstructured(m, name="weight", amount=args.prune)
-            elif isinstance(m, nn.Linear):
-                prune.random_unstructured(m, name="weight", amount=args.prune)
+                prune.l1_unstructured(m, name="weight", amount=args.prune)
+                if m.bias is not None:
+                    prune.l1_unstructured(m, name="bias", amount=args.prune)
 
     if args.restore != 0.0:
-        print("restoring !!!!")
         for m in model.modules():
             if isinstance(m, nn.Conv2d):
                 spec_norm = torch.linalg.norm(
@@ -94,16 +106,15 @@ if __name__ == "__main__":
                 )
                 m.weight.data /= spec_norm
                 m.weight.data *= args.restore
+
                 if args.prune != 0.0:
                     m.weight_orig.data /= spec_norm
                     m.weight_orig.data *= args.restore
-            elif isinstance(m, nn.Linear):
+
+            if isinstance(m, nn.Linear):
                 spec_norm = torch.linalg.norm(m.weight, ord=2)
                 m.weight.data /= spec_norm
                 m.weight.data *= args.restore
-                if args.prune != 0.0:
-                    m.weight_orig.data /= spec_norm
-                    m.weight_orig.data *= args.restore
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()
@@ -116,7 +127,6 @@ if __name__ == "__main__":
     )
 
     # Training loop
-    best = 0
     for epoch in tqdm.trange(160):
         running_loss = 0.0
         model.train()
@@ -164,14 +174,14 @@ if __name__ == "__main__":
 
         train_accuracy = 100 * correct_train / total_train
         test_accuracy = 100 * correct_test / total_test
-        if test_accuracy > best:
-            best = test_accuracy
-            torch.save(model.state_dict(), args.save + "/best.pth")
 
         writer.add_scalar("train accuracy", train_accuracy, epoch)
         writer.add_scalar("test accuracy", test_accuracy, epoch)
+        if args.print:
+            print(
+                "Epoch %d: Train accuracy: %.2f%%, Test accuracy: %.2f%%"
+                % (epoch, train_accuracy, test_accuracy)
+            )
 
     # Close TensorBoard writer
     writer.close()
-    print("Finished Training")
-    print("Best test accuracy: {:.2f}%".format(best))

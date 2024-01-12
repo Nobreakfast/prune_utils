@@ -15,9 +15,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch CIFAR10 Training")
     parser.add_argument("-i", "--im", help="initialization method", default="")
     parser.add_argument("-s", "--save", help="save path", default="./logs/test")
-    parser.add_argument("-l", "--lr", help="learning rate", type=float, default=0.001)
-    parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
-    parser.add_argument("-r", "--restore", help="restore rate", type=float, default=0.0)
+    parser.add_argument("-l", "--lr", help="learning rate", type=float, default=0.1)
 
     args = parser.parse_args()
 
@@ -57,63 +55,11 @@ if __name__ == "__main__":
     # Initialize the model, loss function, and optimizer
     model = resnet.resnet20()
 
-    for m in model.modules():
-        if isinstance(m, nn.Conv2d):
-            if args.im == "xavier":
-                nn.init.xavier_normal_(m.weight, gain=nn.init.calculate_gain("relu"))
-            elif args.im == "kaiming_out":
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif args.im == "kaiming_in":
-                nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
-            elif args.im == "haocheng":
-                m.weight.data = torch.randn(m.weight.shape)
-                m.weight.data /= torch.linalg.norm(
-                    m.weight.view(m.weight.shape[0], -1), ord=2
-                )
-            else:
-                print("No initialization method specified")
-        elif isinstance(m, nn.Linear):
-            m.weight.data = torch.randn(m.weight.shape)
-            m.weight.data /= torch.linalg.norm(m.weight, ord=2)
-            # if args.im == "xavier":
-            #     nn.init.xavier_normal_(m.weight, gain=nn.init.calculate_gain("relu"))
-            # elif args.im == "kaiming_out":
-            #     nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            # elif args.im == "kaiming_in":
-            #     nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
-            # elif args.im == "haocheng":
-            #     m.weight.data = torch.randn(m.weight.shape)
-            #     m.weight.data /= torch.linalg.norm(m.weight, ord=2)
-            # else:
-            #     print("No initialization method specified")
-        elif isinstance(m, nn.BatchNorm2d):
-            m.weight.data.fill_(1)
-            m.bias.data.zero_()
-
-    if args.prune != 0.0:
-        for name, m in model.named_modules():
-            if isinstance(m, nn.Conv2d):
-                prune.l1_unstructured(m, name="weight", amount=args.prune)
-                if m.bias is not None:
-                    prune.l1_unstructured(m, name="bias", amount=args.prune)
-
-    if args.restore != 0.0:
-        for m in model.modules():
-            if isinstance(m, nn.Conv2d):
-                # m.weight.data *= args.restore
-                m.weight.data /= torch.linalg.norm(
-                    m.weight.view(m.weight.shape[0], -1), ord=2
-                )
-                m.weight.data *= args.restore
-                if args.prune != 0.0:
-                    m.weight_orig.data /= torch.linalg.norm(
-                        m.weight.view(m.weight.shape[0], -1), ord=2
-                    )
-                    m.weight_orig.data *= args.restore
-
     model.to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(
+        model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4
+    )
     # scheduler = optim.lr_scheduler.CyclicLR(
     #     optimizer, base_lr=1e-3, max_lr=0.1, step_size_up=5, step_size_down=15
     # )
@@ -122,6 +68,7 @@ if __name__ == "__main__":
     )
 
     # Training loop
+    best = 0
     for epoch in tqdm.trange(160):
         running_loss = 0.0
         model.train()
@@ -169,9 +116,14 @@ if __name__ == "__main__":
 
         train_accuracy = 100 * correct_train / total_train
         test_accuracy = 100 * correct_test / total_test
+        if test_accuracy > best:
+            best = test_accuracy
+            torch.save(model.state_dict(), args.save + "/best.pth")
 
         writer.add_scalar("train accuracy", train_accuracy, epoch)
         writer.add_scalar("test accuracy", test_accuracy, epoch)
 
     # Close TensorBoard writer
     writer.close()
+    print("Finished Training")
+    print("Best test accuracy: {:.2f}%".format(best))
