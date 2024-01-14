@@ -14,7 +14,7 @@ class FC3(nn.Module):
     def forward(self, x):
         x = x.view(x.size(0), -1)
         x = torch.relu(self.bn1(self.fc1(x)))
-        x = torch.relu(self.bn1(self.fc2(x)))
+        x = torch.relu(self.bn2(self.fc2(x)))
         x = self.fc3(x)
         return x
 
