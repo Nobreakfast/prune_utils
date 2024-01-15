@@ -28,19 +28,31 @@ def get_best_accuracy(log_dir):
     return best_accuracy
 
 
+# def process_logs_folder(logs_folder):
+#     results = {}
+
+#     # 遍历logs文件夹中的每个子文件夹
+#     for subdir in os.listdir(logs_folder):
+#         subdir_path = os.path.join(logs_folder, subdir)
+
+#         # 检查是否是文件夹
+#         if os.path.isdir(subdir_path):
+#             # 获取每个子文件夹中的最佳accuracy
+#             best_accuracy = get_best_accuracy(subdir_path)
+#             results[subdir] = best_accuracy
+
+#     return results
+
+
 def process_logs_folder(logs_folder):
     results = {}
-
-    # 遍历logs文件夹中的每个子文件夹
-    for subdir in os.listdir(logs_folder):
-        subdir_path = os.path.join(logs_folder, subdir)
-
-        # 检查是否是文件夹
-        if os.path.isdir(subdir_path):
-            # 获取每个子文件夹中的最佳accuracy
-            best_accuracy = get_best_accuracy(subdir_path)
-            results[subdir] = best_accuracy
-
+    if os.path.isdir(logs_folder):
+        best_accuracy = get_best_accuracy(logs_folder)
+        if best_accuracy != 0.0:
+            results[logs_folder] = best_accuracy
+        for subdir in os.listdir(logs_folder):
+            subdir_path = os.path.join(logs_folder, subdir)
+            results.update(process_logs_folder(subdir_path))
     return results
 
 
