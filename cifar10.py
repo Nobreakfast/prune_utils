@@ -54,14 +54,14 @@ if __name__ == "__main__":
         root="~/Data/cifar10", train=True, download=True, transform=transform_train
     )
     trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=128, shuffle=True, num_workers=2
+        trainset, batch_size=128, shuffle=True, num_workers=4
     )
 
     testset = torchvision.datasets.CIFAR10(
         root="~/Data/cifar10", train=False, download=True, transform=transform_test
     )
     testloader = torch.utils.data.DataLoader(
-        testset, batch_size=128, shuffle=False, num_workers=2
+        testset, batch_size=128, shuffle=False, num_workers=4
     )
 
     if args.model == "resnet20_wobn":
@@ -220,7 +220,7 @@ if __name__ == "__main__":
         test_accuracy = 100 * correct_test / total_test
         if test_accuracy > best:
             best = test_accuracy
-            torch.save(model.state_dict(), args.save + "/best.pth")
+            torch.save(model.state_dict(), save_path + "/best.pth")
 
         generalization_gap = train_accuracy - test_accuracy
         generalization_loss = train_loss - test_loss
