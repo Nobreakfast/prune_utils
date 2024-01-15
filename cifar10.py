@@ -81,27 +81,32 @@ if __name__ == "__main__":
 
         model = VGG16_BN()
 
-    elif args.model == "fc3":
-        from models.fc import FC3
+    elif args.model[:2] == "fc":
+        import models.fc as fc
 
-        model = FC3()
-    elif args.model == "fc3_wobn":
-        from models.fc import FC3_WOBN
+        # extract the number of layers from the model name like fc3 fc20 fc50_wobn
+        num_layers = int(args.model.split("_")[0][2:])
 
-        model = FC3_WOBN()
-    elif args.model == "conv3":
-        from models.conv import CONV3
+        if args.model[-4:] == "wobn":
+            model = fc.FCN_WOBN(num_layers)
+        else:
+            model = fc.FCN(num_layers)
 
-        model = CONV3()
-    elif args.model == "conv3_wobn":
-        from models.conv import CONV3_WOBN
+    elif args.model[:4] == "conv":
+        import models.conv as conv
 
-        model = CONV3_WOBN()
+        # extract the number of layers from the model name like conv3 conv20 conv50_wobn
+        num_layers = int(args.model.split("_")[0][4:])
+        if args.model[-4:] == "wobn":
+            model = conv.CONVN_WOBN(num_layers)
+        else:
+            model = conv.CONVN(num_layers)
+
     else:
         print("No model specified, use fc3")
-        from models.fc import FC3
+        import models.fc as fc
 
-        model = FC3()
+        model = fc.FCN(3)
 
     for m in model.modules():
         if isinstance(m, nn.Conv2d):
