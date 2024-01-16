@@ -3,6 +3,7 @@ import numpy as np
 import os
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import argparse
+import pandas as pd
 
 
 def get_best_accuracy(log_dir):
@@ -28,22 +29,6 @@ def get_best_accuracy(log_dir):
     return best_accuracy
 
 
-# def process_logs_folder(logs_folder):
-#     results = {}
-
-#     # 遍历logs文件夹中的每个子文件夹
-#     for subdir in os.listdir(logs_folder):
-#         subdir_path = os.path.join(logs_folder, subdir)
-
-#         # 检查是否是文件夹
-#         if os.path.isdir(subdir_path):
-#             # 获取每个子文件夹中的最佳accuracy
-#             best_accuracy = get_best_accuracy(subdir_path)
-#             results[subdir] = best_accuracy
-
-#     return results
-
-
 def process_logs_folder(logs_folder):
     results = {}
     if os.path.isdir(logs_folder):
@@ -59,11 +44,51 @@ def process_logs_folder(logs_folder):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="tensorboard log parser")
     parser.add_argument("-p", "--path", help="logs folder path", default="logs")
+    parser.add_argument("-d", "--dest", help="csv file path", default="./results")
     args = parser.parse_args()
 
-    # 处理logs文件夹
+    os.system("mkdir -p " + args.dest)
+
     results = process_logs_folder(args.path)
 
-    # 打印结果
+    # for subdir, best_accuracy in results.items():
+    #     print(f"Folder: {subdir}, Best Test Accuracy: {best_accuracy}")
+
+    data_raw = []
     for subdir, best_accuracy in results.items():
-        print(f"Folder: {subdir}, Best Test Accuracy: {best_accuracy}")
+        subdir = subdir.split("/")
+        data_type = subdir[1]
+        model = subdir[2]
+        filename = subdir[3]
+        filename = filename.split("_")
+        number = filename[-1][-1]
+        restore = filename[-2][1]
+        prune_ratio = filename[-3][1:]
+        init_method = "_".join(filename[:-3])
+        # print(data_type, model, init_method, prune_ratio, restore, number)
+        data_raw.append(
+            [
+                data_type,
+                model,
+                init_method,
+                prune_ratio,
+                restore,
+                number,
+                best_accuracy,
+            ]
+        )
+
+    data_raw = pd.DataFrame(
+        data_raw,
+        columns=[
+            "data type",
+            "model",
+            "init method",
+            "prune ratio",
+            "restore",
+            "number",
+            "best accuracy",
+        ],
+    )
+
+    data_raw.to_csv(args.dest + "/results_raw.csv", index=False)
