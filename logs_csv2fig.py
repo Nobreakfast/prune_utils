@@ -79,14 +79,14 @@ if __name__ == "__main__":
             tmp_data = model_data[model_data["init method"] == init_method]
             tmp_data = tmp_data[tmp_data["restore"] == 0]
             plt.plot(
-                tmp_data["prune ratio"],
+                tmp_data["prune ratio"] * 100,
                 tmp_data["mean"],
                 color="red",
                 label=init_method,
                 marker=marker,
             )
             plt.fill_between(
-                tmp_data["prune ratio"],
+                tmp_data["prune ratio"] * 100,
                 tmp_data["min"],
                 tmp_data["max"],
                 color="red",
@@ -99,7 +99,7 @@ if __name__ == "__main__":
             tmp_data["prune ratio"] = tmp_data["prune ratio"] + 0.005
 
             plt.plot(
-                tmp_data["prune ratio"],
+                tmp_data["prune ratio"] * 100,
                 tmp_data["mean"],
                 color="blue",
                 label=init_method + "_restore",
@@ -107,7 +107,7 @@ if __name__ == "__main__":
                 marker=marker,
             )
             plt.fill_between(
-                tmp_data["prune ratio"],
+                tmp_data["prune ratio"] * 100,
                 tmp_data["min"],
                 tmp_data["max"],
                 color="blue",
@@ -116,7 +116,10 @@ if __name__ == "__main__":
             )
 
         # plt.yscale("log")
+        plt.xticks(range(80, 100, 2))
         plt.xlabel("Prune Ratio")
         plt.ylabel("accuracy")
         plt.legend()
+        # line of graph
+        plt.grid(True, linestyle="--", alpha=0.5)
         plt.savefig(args.dest + "/" + model + ".png")
