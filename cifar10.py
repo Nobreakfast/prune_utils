@@ -184,7 +184,12 @@ if __name__ == "__main__":
                     bn_name = n.replace("conv", "bn")
                     try:
                         bn = __getattr(model, bn_name)
+                        if not isinstance(bn, nn.BatchNorm2d):
+                            print(f"{bn_name} not found")
+                            continue
                         bn.weight.data /= lv
+                        print(f"{bn_name} founded")
+                        print(bn)
                     except:
                         print(f"{bn_name} not found")
                         pass
@@ -196,7 +201,12 @@ if __name__ == "__main__":
                     bn_name = n.replace("fc", "bn")
                     try:
                         bn = __getattr(model, bn_name)
+                        if not isinstance(bn, nn.BatchNorm1d):
+                            print(f"{bn_name} not found")
+                            continue
                         bn.weight.data /= lv
+                        print(f"{bn_name} founded")
+                        print(bn)
                     except:
                         print(f"{bn_name} not found")
                         pass
@@ -215,7 +225,12 @@ if __name__ == "__main__":
                     bn_name = n.replace("conv", "bn")
                     try:
                         bn = __getattr(model, bn_name)
+                        if not isinstance(bn, nn.BatchNorm2d):
+                            print(f"{bn_name} not found")
+                            continue
                         bn.weight.data /= lv
+                        print(f"{bn_name} founded")
+                        print(bn)
                     except:
                         print(f"{bn_name} not found")
                         pass
@@ -230,7 +245,12 @@ if __name__ == "__main__":
                     bn_name = n.replace("fc", "bn")
                     try:
                         bn = __getattr(model, bn_name)
+                        if not isinstance(bn, nn.BatchNorm1d):
+                            print(f"{bn_name} not found")
+                            continue
                         bn.weight.data /= lv
+                        print(f"{bn_name} founded")
+                        print(bn)
                     except:
                         print(f"{bn_name} not found")
                         pass
