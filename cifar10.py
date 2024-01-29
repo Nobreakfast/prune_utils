@@ -158,6 +158,7 @@ if __name__ == "__main__":
     if args.restore != 0:
         print("restoring !!!!")
         if args.restore == 1:  # restore weight
+            print("restore weight")
             for m in model.modules():
                 if isinstance(m, nn.Conv2d):
                     spec_norm = torch.linalg.norm(
@@ -172,6 +173,7 @@ if __name__ == "__main__":
                     if args.prune != 0.0:
                         m.weight_orig.data /= spec_norm
         elif args.restore == 2:  # restore bn
+            print("restore BN")
             for n, m in model.named_modules():
                 if isinstance(m, nn.Conv2d):
                     spec_norm = torch.linalg.norm(
@@ -199,6 +201,7 @@ if __name__ == "__main__":
                         print(f"{bn_name} not found")
                         pass
         elif args.restore == 3:  # restore both
+            print("restoring BN+weight")
             for n, m in model.named_modules():
                 if isinstance(m, nn.Conv2d):
                     spec_norm = torch.linalg.norm(
