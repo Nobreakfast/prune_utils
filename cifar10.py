@@ -66,14 +66,14 @@ if __name__ == "__main__":
         root="~/Data/cifar10", train=True, download=True, transform=transform_train
     )
     trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=128, shuffle=True, num_workers=4
+        trainset, batch_size=256, shuffle=True, num_workers=4
     )
 
     testset = torchvision.datasets.CIFAR10(
         root="~/Data/cifar10", train=False, download=True, transform=transform_test
     )
     testloader = torch.utils.data.DataLoader(
-        testset, batch_size=128, shuffle=False, num_workers=4
+        testset, batch_size=256, shuffle=False, num_workers=4
     )
 
     if args.model == "resnet20_wobn":
