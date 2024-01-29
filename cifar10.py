@@ -10,11 +10,23 @@ import tqdm
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
+def __getattr(model, name):
+    name_list = name.split(".")
+    ret = model
+    for n in name_list:
+        if n.isdigit():
+            ret = ret[int(n)]
+        else:
+            ret = getattr(ret, n)
+    return ret
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch CIFAR10 Training")
     parser.add_argument("-s", "--save", help="save path", default="test")
     parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
-    parser.add_argument("-r", "--restore", help="restore rate", type=float, default=0.0)
+    parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
     parser.add_argument(
         "-i",
         "--im",
@@ -143,25 +155,82 @@ if __name__ == "__main__":
             elif isinstance(m, nn.Linear):
                 prune.random_unstructured(m, name="weight", amount=args.prune)
 
-    if args.restore != 0.0:
+    if args.restore != 0:
         print("restoring !!!!")
-        for m in model.modules():
-            if isinstance(m, nn.Conv2d):
-                spec_norm = torch.linalg.norm(
-                    m.weight.view(m.weight.shape[0], -1), ord=2
-                )
-                m.weight.data /= spec_norm
-                m.weight.data *= args.restore
-                if args.prune != 0.0:
-                    m.weight_orig.data /= spec_norm
-                    m.weight_orig.data *= args.restore
-            elif isinstance(m, nn.Linear):
-                spec_norm = torch.linalg.norm(m.weight, ord=2)
-                m.weight.data /= spec_norm
-                m.weight.data *= args.restore
-                if args.prune != 0.0:
-                    m.weight_orig.data /= spec_norm
-                    m.weight_orig.data *= args.restore
+        if args.restore == 1:  # restore weight
+            for m in model.modules():
+                if isinstance(m, nn.Conv2d):
+                    spec_norm = torch.linalg.norm(
+                        m.weight.view(m.weight.shape[0], -1), ord=2
+                    )
+                    m.weight.data /= spec_norm
+                    if args.prune != 0.0:
+                        m.weight_orig.data /= spec_norm
+                elif isinstance(m, nn.Linear):
+                    spec_norm = torch.linalg.norm(m.weight, ord=2)
+                    m.weight.data /= spec_norm
+                    if args.prune != 0.0:
+                        m.weight_orig.data /= spec_norm
+        elif args.restore == 2:  # restore bn
+            for n, m in model.named_modules():
+                if isinstance(m, nn.Conv2d):
+                    spec_norm = torch.linalg.norm(
+                        m.weight.view(m.weight.shape[0], -1), ord=2
+                    )
+                    shape = m.weight.shape[1] * m.weight.shape[2] * m.weight.shape[3]
+                    lv = spec_norm / torch.sqrt(0.5 * shape * m.weight.var())
+                    bn_name = n.replace("conv", "bn")
+                    try:
+                        bn = __getattr(model, bn_name)
+                        bn.weight.data /= lv
+                    except:
+                        print(f"{bn_name} not found")
+                        pass
+                elif isinstance(m, nn.Linear):
+                    spec_norm = torch.linalg.norm(m.weight, ord=2)
+                    lv = spec_norm / torch.sqrt(
+                        0.5 * m.weight.shape[1] * m.weight.var()
+                    )
+                    bn_name = n.replace("fc", "bn")
+                    try:
+                        bn = __getattr(model, bn_name)
+                        bn.weight.data /= lv
+                    except:
+                        print(f"{bn_name} not found")
+                        pass
+        elif args.restore == 3:  # restore both
+            for n, m in model.named_modules():
+                if isinstance(m, nn.Conv2d):
+                    spec_norm = torch.linalg.norm(
+                        m.weight.view(m.weight.shape[0], -1), ord=2
+                    )
+                    shape = m.weight.shape[1] * m.weight.shape[2] * m.weight.shape[3]
+                    lv = spec_norm / torch.sqrt(0.5 * shape * m.weight.var())
+                    m.weight.data /= spec_norm
+                    if args.prune != 0.0:
+                        m.weight_orig.data /= spec_norm
+                    bn_name = n.replace("conv", "bn")
+                    try:
+                        bn = __getattr(model, bn_name)
+                        bn.weight.data /= lv
+                    except:
+                        print(f"{bn_name} not found")
+                        pass
+                elif isinstance(m, nn.Linear):
+                    spec_norm = torch.linalg.norm(m.weight, ord=2)
+                    lv = spec_norm / torch.sqrt(
+                        0.5 * m.weight.shape[1] * m.weight.var()
+                    )
+                    m.weight.data /= spec_norm
+                    if args.prune != 0.0:
+                        m.weight_orig.data /= spec_norm
+                    bn_name = n.replace("fc", "bn")
+                    try:
+                        bn = __getattr(model, bn_name)
+                        bn.weight.data /= lv
+                    except:
+                        print(f"{bn_name} not found")
+                        pass
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()
