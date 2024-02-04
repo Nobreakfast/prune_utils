@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -7,6 +9,8 @@ from torch.nn.utils import prune
 from torch.utils.tensorboard import SummaryWriter
 import argparse
 import tqdm
+import pandas as pd
+import csv
 
 from prune_utils.pai import *
 
@@ -26,7 +30,7 @@ def __getattr(model, name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch CIFAR10 Training")
-    parser.add_argument("-s", "--save", help="save path", default="test")
+    parser.add_argument("-s", "--save", help="save path", type=int, default=1)
     parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
     parser.add_argument("-a", "--algorithm", help="prune algorithm", default="rand")
     parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
@@ -45,26 +49,32 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Set up TensorBoard writer with log directory
-    save_path = f"logs/cifar10/{args.model}/{args.im}_p{args.prune:.2f}_r{args.restore}_no.{args.save}"
-    writer = SummaryWriter(log_dir=save_path)
+    save_path = f"logs_lipz/cifar10/{args.model}/{args.im}_p{args.prune:.2f}_r{args.restore}/no.{args.save}"
+    os.makedirs(save_path, exist_ok=True)
 
     # Load CIFAR-10 dataset
-    transform_train = transforms.Compose(
-        [
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-        ]
-    )
+    if args.prune != 0.0:
+        if args.algorithm == "synflow" or args.algorithm == "snip":
+            transform_train = transforms.Compose(
+                [
+                    transforms.RandomCrop(32, padding=4),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.ToTensor(),
+                    transforms.Normalize(
+                        (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+                    ),
+                ]
+            )
 
-    trainset = torchvision.datasets.CIFAR10(
-        root="~/Data/cifar10", train=True, download=True, transform=transform_train
-    )
-    trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=256, shuffle=True, num_workers=4
-    )
+            trainset = torchvision.datasets.CIFAR10(
+                root="~/Data/cifar10",
+                train=True,
+                download=True,
+                transform=transform_train,
+            )
+            trainloader = torch.utils.data.DataLoader(
+                trainset, batch_size=256, shuffle=True, num_workers=4
+            )
 
     if args.model == "resnet20_wobn":
         from models.resnet_wobn import resnet20
@@ -138,6 +148,25 @@ if __name__ == "__main__":
             else:
                 print("No initialization method specified")
 
+    # model, module_name, initialization, prune_algorithm, sparsity, restore, lipz_before, lipz_after
+    initialized, pruned, restored = [], [], []
+    for name, m in model.named_modules():
+        if isinstance(m, nn.Conv2d):
+            spec_norm = (
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2)
+                .detach()
+                .numpy()
+                .item()
+            )
+            var = m.weight.var().detach().numpy().item()
+            mean = m.weight.mean().detach().numpy().item()
+            initialized.append([name, spec_norm, var, mean])
+        elif isinstance(m, nn.Linear):
+            spec_norm = torch.linalg.norm(m.weight, ord=2).detach().numpy().item()
+            var = m.weight.var().detach().numpy().item()
+            mean = m.weight.mean().detach().numpy().item()
+            initialized.append([name, spec_norm, var, mean])
+
     if args.prune != 0.0:
         print(f"Original Sparsity: {cal_sparsity(model)}%")
         if args.algorithm == "rand":
@@ -169,6 +198,23 @@ if __name__ == "__main__":
                 elif isinstance(m, nn.Linear):
                     prune.random_unstructured(m, name="weight", amount=args.prune)
         print(f"Pruned Sparsity: {cal_sparsity(model)}%")
+
+    for name, m in model.named_modules():
+        if isinstance(m, nn.Conv2d):
+            spec_norm = (
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2)
+                .detach()
+                .numpy()
+                .item()
+            )
+            var = m.weight.var().detach().numpy().item()
+            mean = m.weight.mean().detach().numpy().item()
+            pruned.append([name, spec_norm, var, mean])
+        elif isinstance(m, nn.Linear):
+            spec_norm = torch.linalg.norm(m.weight, ord=2).detach().numpy().item()
+            var = m.weight.var().detach().numpy().item()
+            mean = m.weight.mean().detach().numpy().item()
+            pruned.append([name, spec_norm, var, mean])
 
     if args.restore != 0:
         print("restoring !!!!")
@@ -269,3 +315,39 @@ if __name__ == "__main__":
                     except:
                         print(f"{bn_name} not found")
                         pass
+    for name, m in model.named_modules():
+        if isinstance(m, nn.Conv2d):
+            spec_norm = (
+                torch.linalg.norm(m.weight.view(m.weight.shape[0], -1), ord=2)
+                .detach()
+                .numpy()
+                .item()
+            )
+            var = m.weight.var().detach().numpy().item()
+            mean = m.weight.mean().detach().numpy().item()
+            restored.append([name, spec_norm, var, mean])
+        elif isinstance(m, nn.Linear):
+            spec_norm = torch.linalg.norm(m.weight, ord=2).detach().numpy().item()
+            var = m.weight.var().detach().numpy().item()
+            mean = m.weight.mean().detach().numpy().item()
+            restored.append([name, spec_norm, var, mean])
+    print(initialized)
+    print(pruned)
+    print(restored)
+    # save initialized to csv
+    with open(f"{save_path}/initialized.csv", mode="w") as file:
+        writer = csv.writer(file)
+        writer.writerow(["#name", "spec_norm", "var", "mean"])
+        writer.writerows(initialized)
+
+    # save pruned to csv
+    with open(f"{save_path}/pruned.csv", mode="w") as file:
+        writer = csv.writer(file)
+        writer.writerow(["#name", "spec_norm", "var", "mean"])
+        writer.writerows(pruned)
+
+    # save restored to csv
+    with open(f"{save_path}/restored.csv", mode="w") as file:
+        writer = csv.writer(file)
+        writer.writerow(["#name", "spec_norm", "var", "mean"])
+        writer.writerows(restored)
