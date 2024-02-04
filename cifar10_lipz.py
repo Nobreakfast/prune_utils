@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    save_path = f"logs_lipz/cifar10/{args.model}/{args.im}_p{args.prune:.2f}_r{args.restore}/no.{args.save}"
+    save_path = f"logs_lipz/cifar10/{args.model}_{args.im}/p{args.algorithm}_{args.prune:.2f}/r{args.restore}/no.{args.save}"
     os.makedirs(save_path, exist_ok=True)
 
     # Load CIFAR-10 dataset
