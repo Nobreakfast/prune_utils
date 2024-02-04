@@ -64,15 +64,18 @@ def snip(model, dataloader):
                     * module.weight.data.detach().abs()
                 )
         model.zero_grad()
+        break
     return score_dict
 
 
-def synflow(model, dataloader):
+def synflow(model, example_data):
+    @torch.no_grad()
     def linearize(model):
         for name, module in model.named_modules():
             if isinstance(module, (nn.Conv2d, nn.Linear)):
                 module.weight.data = module.weight.data.abs()
 
+    @torch.no_grad()
     def nonlinearize(model, signs_dict):
         for name, module in model.named_modules():
             if isinstance(module, (nn.Conv2d, nn.Linear)):
@@ -86,11 +89,11 @@ def synflow(model, dataloader):
             score_dict[name] = torch.zeros_like(module.weight.data)
             sign_dict[name] = torch.sign(module.weight.data).detach()
 
-    example_data = next(iter(dataloader)).to(device)
     input_dim = list(example_data[0, :].shape)
     inputs = torch.ones([1] + input_dim).to(device)
 
     linearize(model)
+    model.eval()
     output = model(inputs)
     torch.sum(output).backward()
     for name, module in model.named_modules():
@@ -100,6 +103,7 @@ def synflow(model, dataloader):
                 * module.weight.data.detach().abs()
             )
     model.zero_grad()
+    model.train()
     nonlinearize(model, sign_dict)
     return score_dict
 
@@ -128,6 +132,12 @@ def cal_sparsity(model):
             )
             num_elements += module.weight.data.numel()
     return num_zeros / num_elements
+
+
+def remove_mask(model):
+    for name, module in model.named_modules():
+        if isinstance(module, (nn.Conv2d, nn.Linear)):
+            prune.remove(module, "weight")
 
 
 if __name__ == "__main__":
