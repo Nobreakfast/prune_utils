@@ -102,7 +102,7 @@ if __name__ == "__main__":
                 tmp_data["prune ratio"] * 100,
                 tmp_data["mean"],
                 color="blue",
-                label=init_method + "_restore",
+                label=init_method + "_r1",
                 linestyle="--",
                 marker=marker,
             )
@@ -111,6 +111,50 @@ if __name__ == "__main__":
                 tmp_data["min"],
                 tmp_data["max"],
                 color="blue",
+                alpha=0.2,
+                # label="min-max",
+            )
+
+            # restore 2
+            tmp_data = model_data[model_data["init method"] == init_method]
+            tmp_data = tmp_data[tmp_data["restore"] == 2]
+            tmp_data["prune ratio"] = tmp_data["prune ratio"] + 0.010
+
+            plt.plot(
+                tmp_data["prune ratio"] * 100,
+                tmp_data["mean"],
+                color="green",
+                label=init_method + "_r2",
+                linestyle="--",
+                marker=marker,
+            )
+            plt.fill_between(
+                tmp_data["prune ratio"] * 100,
+                tmp_data["min"],
+                tmp_data["max"],
+                color="green",
+                alpha=0.2,
+                # label="min-max",
+            )
+
+            # restore 3
+            tmp_data = model_data[model_data["init method"] == init_method]
+            tmp_data = tmp_data[tmp_data["restore"] == 3]
+            tmp_data["prune ratio"] = tmp_data["prune ratio"] + 0.015
+
+            plt.plot(
+                tmp_data["prune ratio"] * 100,
+                tmp_data["mean"],
+                color="purple",
+                label=init_method + "_r3",
+                linestyle="--",
+                marker=marker,
+            )
+            plt.fill_between(
+                tmp_data["prune ratio"] * 100,
+                tmp_data["min"],
+                tmp_data["max"],
+                color="purple",
                 alpha=0.2,
                 # label="min-max",
             )

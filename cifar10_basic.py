@@ -254,56 +254,6 @@ if __name__ == "__main__":
                     except:
                         print(f"{bn_name} not found")
                         pass
-        elif args.restore == 4:  # restore both and move mean
-            print("restoring BN+weight+mean")
-            for n, m in model.named_modules():
-                if isinstance(m, nn.Conv2d):
-                    mean = m.weight.data.mean()
-                    m.weight.data -= mean
-                    spec_norm = torch.linalg.norm(
-                        m.weight.view(m.weight.shape[0], -1), ord=2
-                    )
-                    shape = m.weight.shape[1] * m.weight.shape[2] * m.weight.shape[3]
-                    lv = spec_norm / torch.sqrt(0.5 * shape * m.weight.var())
-                    m.weight.data /= spec_norm
-                    if args.prune != 0.0:
-                        m.weight_orig.data -= mean
-                        m.weight_orig.data /= spec_norm
-                    bn_name = n.replace("conv", "bn")
-                    try:
-                        bn = __getattr(model, bn_name)
-                        if not isinstance(bn, nn.BatchNorm2d):
-                            print(f"{bn_name} not found")
-                            continue
-                        bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
-                    except:
-                        print(f"{bn_name} not found")
-                        pass
-                elif isinstance(m, nn.Linear):
-                    mean = m.weight.data.mean()
-                    m.weight.data -= mean
-                    spec_norm = torch.linalg.norm(m.weight, ord=2)
-                    lv = spec_norm / torch.sqrt(
-                        0.5 * m.weight.shape[1] * m.weight.var()
-                    )
-                    m.weight.data /= spec_norm
-                    if args.prune != 0.0:
-                        m.weight_orig.data -= mean
-                        m.weight_orig.data /= spec_norm
-                    bn_name = n.replace("fc", "bn")
-                    try:
-                        bn = __getattr(model, bn_name)
-                        if not isinstance(bn, nn.BatchNorm1d):
-                            print(f"{bn_name} not found")
-                            continue
-                        bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
-                    except:
-                        print(f"{bn_name} not found")
-                        pass
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()
