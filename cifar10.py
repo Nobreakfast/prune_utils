@@ -39,6 +39,22 @@ if __name__ == "__main__":
         help="model",
         default=None,
     )
+    # only works in resnet_res
+    parser.add_argument(
+        "-a",
+        "--alpha",
+        help="alpha",
+        type=float,
+        default=None,
+    )
+    # only works in resnet_res
+    parser.add_argument(
+        "-b",
+        "--beta",
+        help="beta",
+        type=float,
+        default=None,
+    )
 
     args = parser.parse_args()
 
@@ -84,6 +100,10 @@ if __name__ == "__main__":
         from models.resnet import resnet20
 
         model = resnet20()
+    elif args.model == "resnet20_res":
+        from models.resnet_res import resnet20
+
+        model = resnet20(alpha, beta)
     elif args.model == "vgg16":
         from models.vgg16 import VGG16
 
