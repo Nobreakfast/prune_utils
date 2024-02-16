@@ -27,6 +27,7 @@ Reference:
 If you use this implementation in you work, please don't forget to mention the
 author, Yerlan Idelbayev.
 """
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -193,8 +194,11 @@ def test(net):
 
 
 if __name__ == "__main__":
-    for net_name in __all__:
-        if net_name.startswith("resnet"):
-            print(net_name)
-            test(globals()[net_name]())
-            print()
+    # for net_name in __all__:
+    #     if net_name.startswith("resnet"):
+    #         print(net_name)
+    #         test(globals()[net_name]())
+    #         print()
+    model = resnet20()
+    input = torch.randn(1, 3, 32, 32)
+    output = model(input)

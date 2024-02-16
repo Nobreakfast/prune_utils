@@ -103,7 +103,7 @@ if __name__ == "__main__":
     elif args.model == "resnet20_res":
         from models.resnet_res import resnet20
 
-        model = resnet20(alpha, beta)
+        model = resnet20(args.alpha, args.beta)
     elif args.model == "vgg16":
         from models.vgg16 import VGG16
 

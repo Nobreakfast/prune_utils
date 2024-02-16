@@ -103,14 +103,16 @@ class BasicBlock(nn.Module):
                 )
         if alpha is not None:
             # alpha is a learnable parameter which has the same shape as the bn2
-            self.alpha = nn.Parameter(torch.Tensor(planes))
-            self.alpha.data.fill_(alpha)
+            # self.alpha = nn.Parameter(torch.Tensor(planes))
+            # self.alpha.data.fill_(alpha)
+            self.alpha = alpha
         else:
             self.alpha = 1.0
         if beta is not None:
             # beta is a learnable parameter which has the same shape as the bn2
             self.beta = nn.Parameter(torch.Tensor(planes))
             self.beta.data.fill_(beta)
+            # self.beta = beta
         else:
             self.beta = 1.0
 
@@ -118,7 +120,7 @@ class BasicBlock(nn.Module):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.bn2(self.conv2(out))
         # out += self.shortcut(x)
-        out = self.alpha * out + self.beta * self.shortcut(x)
+        out = self.beta * out + self.alpha * self.shortcut(x)
         out = F.relu(out)
         return out
 
@@ -147,7 +149,7 @@ class ResNet(nn.Module):
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
         for stride in strides:
-            layers.append(block(self.in_planes, planes, stride, alpha, beta))
+            layers.append(block(self.in_planes, planes, stride, alpha=alpha, beta=beta))
             self.in_planes = planes * block.expansion
 
         return nn.Sequential(*layers)
@@ -213,8 +215,11 @@ def test(net):
 
 
 if __name__ == "__main__":
-    for net_name in __all__:
-        if net_name.startswith("resnet"):
-            print(net_name)
-            test(globals()[net_name]())
-            print()
+    # for net_name in __all__:
+    #     if net_name.startswith("resnet"):
+    #         print(net_name)
+    #         test(globals()[net_name]())
+    #         print()
+    model = resnet20(1, 0.1)
+    input = torch.randn(1, 3, 32, 32)
+    output = model(input)
