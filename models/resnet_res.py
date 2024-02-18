@@ -101,16 +101,16 @@ class BasicBlock(nn.Module):
                     ),
                     nn.BatchNorm2d(self.expansion * planes),
                 )
-        if alpha is not None:
+        if alpha is not None and alpha != 1.0:
             # alpha is a learnable parameter which has the same shape as the bn2
-            # self.alpha = nn.Parameter(torch.Tensor(planes))
-            # self.alpha.data.fill_(alpha)
-            self.alpha = alpha
+            self.alpha = torch.ones(1, planes, 1, 1, requires_grad=True)
+            self.alpha.data.fill_(alpha)
+            # self.alpha = alpha
         else:
             self.alpha = 1.0
         if beta is not None:
             # beta is a learnable parameter which has the same shape as the bn2
-            self.beta = nn.Parameter(torch.Tensor(planes))
+            self.beta = torch.ones(1, planes, 1, 1, requires_grad=True)
             self.beta.data.fill_(beta)
             # self.beta = beta
         else:
@@ -166,15 +166,15 @@ class ResNet(nn.Module):
 
 
 def resnet8(alpha, beta):
-    return ResNet(BasicBlock, [1, 1, 1], alpha, beta)
+    return ResNet(BasicBlock, [1, 1, 1], alpha=alpha, beta=beta)
 
 
 def resnet20(alpha, beta):
-    return ResNet(BasicBlock, [3, 3, 3], alpha, beta)
+    return ResNet(BasicBlock, [3, 3, 3], alpha=alpha, beta=beta)
 
 
 def resnet32(alpha, beta):
-    return ResNet(BasicBlock, [5, 5, 5], alpha, beta)
+    return ResNet(BasicBlock, [5, 5, 5], alpha=alpha, beta=beta)
 
 
 def resnet44(alpha, beta):
@@ -220,6 +220,6 @@ if __name__ == "__main__":
     #         print(net_name)
     #         test(globals()[net_name]())
     #         print()
-    model = resnet20(1, 0.1)
-    input = torch.randn(1, 3, 32, 32)
+    model = resnet20(0.9, 0.1)
+    input = torch.randn(2, 3, 32, 32)
     output = model(input)
