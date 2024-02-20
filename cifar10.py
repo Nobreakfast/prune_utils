@@ -26,6 +26,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch CIFAR10 Training")
     parser.add_argument("-s", "--save", help="save path", default="test")
     parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
+    parser.add_argument("-a", "--algorithm", help="prune algorithm", default="uniform")
     parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
     parser.add_argument(
         "-i",
@@ -59,7 +60,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Set up TensorBoard writer with log directory
-    save_path = f"logs/cifar10/{args.model}/{args.im}_p{args.prune:.2f}_r{args.restore}_no.{args.save}"
+    # save_path = f"logs/cifar10/{args.model}/{args.im}_p{args.prune:.2f}_r{args.restore}_no.{args.save}"
+    save_path = f"logs_lipz/cifar10/{args.model}_{args.im}/p{args.algorithm}_{args.prune:.2f}/r{args.restore}/no.{args.save}"
     writer = SummaryWriter(log_dir=save_path)
 
     # Load CIFAR-10 dataset
@@ -169,11 +171,36 @@ if __name__ == "__main__":
                 print("No initialization method specified")
 
     if args.prune != 0.0:
-        for name, m in model.named_modules():
-            if isinstance(m, nn.Conv2d):
-                prune.random_unstructured(m, name="weight", amount=args.prune)
-            elif isinstance(m, nn.Linear):
-                prune.random_unstructured(m, name="weight", amount=args.prune)
+        print(f"Original Sparsity: {cal_sparsity(model)}%")
+        if args.algorithm == "rand":
+            score_dict = rand(model)
+            threshold = cal_threshold(score_dict, args.prune)
+            apply_prune(model, score_dict, threshold)
+        elif args.algorithm == "randn":
+            score_dict = randn(model)
+            threshold = cal_threshold(score_dict, args.prune)
+            apply_prune(model, score_dict, threshold)
+        elif args.algorithm == "snip":
+            score_dict = snip(model, trainloader)
+            threshold = cal_threshold(score_dict, args.prune)
+            apply_prune(model, score_dict, threshold)
+        elif args.algorithm == "synflow":
+            example_data, _ = next(iter(trainloader))
+            iterations = 100
+            for i in range(iterations):
+                prune_ratio = args.prune / iterations * (i + 1)
+                score_dict = synflow(model, example_data)
+                threshold = cal_threshold(score_dict, prune_ratio)
+                apply_prune(model, score_dict, threshold)
+                if i != iterations - 1:
+                    remove_mask(model)
+        else:
+            for name, m in model.named_modules():
+                if isinstance(m, nn.Conv2d):
+                    prune.random_unstructured(m, name="weight", amount=args.prune)
+                elif isinstance(m, nn.Linear):
+                    prune.random_unstructured(m, name="weight", amount=args.prune)
+        print(f"Pruned Sparsity: {cal_sparsity(model)}%")
 
     if args.restore != 0:
         print("restoring !!!!")
@@ -324,6 +351,27 @@ if __name__ == "__main__":
                     except:
                         print(f"{bn_name} not found")
                         pass
+        elif args.restore == 5:  # restore weight and mean
+            print("restore weight")
+            for m in model.modules():
+                if isinstance(m, nn.Conv2d):
+                    mean = m.weight.data.mean()
+                    m.weight.data -= mean
+                    spec_norm = torch.linalg.norm(
+                        m.weight.view(m.weight.shape[0], -1), ord=2
+                    )
+                    m.weight.data /= spec_norm
+                    if args.prune != 0.0:
+                        m.weight_orig.data -= mean
+                        m.weight_orig.data /= spec_norm
+                elif isinstance(m, nn.Linear):
+                    mean = m.weight.data.mean()
+                    m.weight.data -= mean
+                    spec_norm = torch.linalg.norm(m.weight, ord=2)
+                    m.weight.data /= spec_norm
+                    if args.prune != 0.0:
+                        m.weight_orig.data -= mean
+                        m.weight_orig.data /= spec_norm
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()

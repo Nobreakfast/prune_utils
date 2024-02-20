@@ -7,20 +7,22 @@ import pandas as pd
 
 
 def get_data(log_dir):
-    initialized = np.fromfile(
-        os.path.join(log_dir, "initialized.csv"), dtype=np.float64
-    )
-    pruned = np.fromfile(os.path.join(log_dir, "pruned.csv"), dtype=np.float64)
-    restored = np.fromfile(os.path.join(log_dir, "restored.csv"), dtype=np.float64)
-    data = np.concatenate((initialized, pruned[:, 1:], restored[:, 1:]))
+    initialized = pd.read_csv(log_dir + "/initialized.csv").values
+    pruned = pd.read_csv(log_dir + "/pruned.csv").values
+    restored = pd.read_csv(log_dir + "/restored.csv").values
+    data = np.concatenate((initialized, pruned[:, 1:], restored[:, 1:]), axis=1)
     return data
 
 
 def process_logs_folder(logs_folder):
     results = {}
     if os.path.isdir(logs_folder):
-        data = get_data(logs_folder)
-        results[logs_folder] = data
+        try:
+            data = get_data(logs_folder)
+            results[logs_folder] = data
+        except:
+            print(f"Error processing {logs_folder}")
+            pass
         for subdir in os.listdir(logs_folder):
             subdir_path = os.path.join(logs_folder, subdir)
             results.update(process_logs_folder(subdir_path))
@@ -29,8 +31,10 @@ def process_logs_folder(logs_folder):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="tensorboard log parser")
-    parser.add_argument("-p", "--path", help="logs folder path", default="logs")
-    parser.add_argument("-d", "--dest", help="csv file path", default="./results")
+    parser.add_argument("-p", "--path", help="logs folder path", default="logs_lipz")
+    parser.add_argument(
+        "-d", "--dest", help="csv file path", default="./results/basic_lipz"
+    )
     args = parser.parse_args()
 
     os.system("mkdir -p " + args.dest)
@@ -45,15 +49,19 @@ if __name__ == "__main__":
         subdir = subdir.split("/")
         data_type = subdir[1]
         model_init = subdir[2].split("_")
-        model = model_init[0]
-        im = model_init[1]
+        if model_init[1] == "wobn":
+            model = "_".join(model_init[:2])
+            im = "_".join(model_init[2:])
+        else:
+            model = model_init[0]
+            im = "_".join(model_init[1:])
         prune_info = subdir[3].split("_")
         pa = prune_info[0][1:]
         pm = prune_info[1]
         restore = subdir[4][1:]
         number = subdir[5][3:]
 
-        for i in data.shape[0]:
+        for i in range(data.shape[0]):
             # print(data_type, model, init_method, prune_ratio, restore, number)
             tmp_data = data[i]
             data_raw.append(

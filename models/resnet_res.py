@@ -103,14 +103,14 @@ class BasicBlock(nn.Module):
                 )
         if alpha is not None and alpha != 1.0:
             # alpha is a learnable parameter which has the same shape as the bn2
-            self.alpha = torch.ones(1, planes, 1, 1, requires_grad=True)
+            self.alpha = nn.Parameter(torch.ones(1, planes, 1, 1, requires_grad=True))
             self.alpha.data.fill_(alpha)
             # self.alpha = alpha
         else:
             self.alpha = 1.0
         if beta is not None:
             # beta is a learnable parameter which has the same shape as the bn2
-            self.beta = torch.ones(1, planes, 1, 1, requires_grad=True)
+            self.beta = nn.Parameter(torch.ones(1, planes, 1, 1, requires_grad=True))
             self.beta.data.fill_(beta)
             # self.beta = beta
         else:
