@@ -7,6 +7,7 @@ from torch.nn.utils import prune
 from torch.utils.tensorboard import SummaryWriter
 import argparse
 import tqdm
+from prune_utils.pai import *
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -26,7 +27,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch CIFAR10 Training")
     parser.add_argument("-s", "--save", help="save path", default="test")
     parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
-    parser.add_argument("-a", "--algorithm", help="prune algorithm", default="uniform")
+    parser.add_argument("-a", "--algorithm", help="prune algorithm", default="nonprune")
     parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
     parser.add_argument(
         "-i",
@@ -61,7 +62,7 @@ if __name__ == "__main__":
 
     # Set up TensorBoard writer with log directory
     # save_path = f"logs/cifar10/{args.model}/{args.im}_p{args.prune:.2f}_r{args.restore}_no.{args.save}"
-    save_path = f"logs/cifar10/{args.model}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
+    save_path = f"logs/cifar10/{args.model}/{args.im}/{args.algorithm}/{args.prune:.2f}r{args.restore}/no.{args.save}"
     writer = SummaryWriter(log_dir=save_path)
 
     # Load CIFAR-10 dataset

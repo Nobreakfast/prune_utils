@@ -7,6 +7,7 @@ from torch.nn.utils import prune
 from torch.utils.tensorboard import SummaryWriter
 import argparse
 import tqdm
+from prune_utils.pai import *
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -26,7 +27,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch CIFAR100 Training")
     parser.add_argument("-s", "--save", help="save path", default="0")
     parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
-    parser.add_argument("-a", "--algorithm", help="prune algorithm", default="uniform")
+    parser.add_argument("-a", "--algorithm", help="prune algorithm", default="nonprune")
     parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
     parser.add_argument(
         "-i",
@@ -336,80 +337,80 @@ if __name__ == "__main__":
                         m.weight_orig.data -= mean
                         m.weight_orig.data /= spec_norm
 
-    model.to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
-    scheduler = optim.lr_scheduler.MultiStepLR(
-        optimizer, milestones=[80, 120, 140], gamma=0.1
-    )
+    # model.to(device)
+    # criterion = nn.CrossEntropyLoss()
+    # optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+    # scheduler = optim.lr_scheduler.MultiStepLR(
+    #     optimizer, milestones=[80, 120, 140], gamma=0.1
+    # )
 
-    # Training loop
-    best = 0
-    for epoch in tqdm.trange(160):
-        running_loss = 0.0
-        model.train()
-        for i, data in enumerate(trainloader, 0):
-            inputs, labels = data
-            inputs, labels = inputs.to(device), labels.to(device)
+    # # Training loop
+    # best = 0
+    # for epoch in tqdm.trange(160):
+    #     running_loss = 0.0
+    #     model.train()
+    #     for i, data in enumerate(trainloader, 0):
+    #         inputs, labels = data
+    #         inputs, labels = inputs.to(device), labels.to(device)
 
-            optimizer.zero_grad()
+    #         optimizer.zero_grad()
 
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
+    #         outputs = model(inputs)
+    #         loss = criterion(outputs, labels)
+    #         loss.backward()
+    #         optimizer.step()
 
-            running_loss += loss.item()
-            if i % 200 == 199:
-                writer.add_scalar(
-                    "training loss", running_loss / 200, epoch * len(trainloader) + i
-                )
-                running_loss = 0.0
-        scheduler.step()
+    #         running_loss += loss.item()
+    #         if i % 200 == 199:
+    #             writer.add_scalar(
+    #                 "training loss", running_loss / 200, epoch * len(trainloader) + i
+    #             )
+    #             running_loss = 0.0
+    #     scheduler.step()
 
-        # Calculate accuracy on train and test sets
-        correct_train = 0
-        total_train = 0
-        correct_test = 0
-        total_test = 0
-        model.eval()
-        with torch.no_grad():
-            train_loss = 0.0
-            for data in trainloader:
-                images, labels = data
-                images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
-                _, predicted = torch.max(outputs.data, 1)
-                train_loss += criterion(outputs, labels).item()
-                total_train += labels.size(0)
-                correct_train += (predicted == labels).sum().item()
+    #     # Calculate accuracy on train and test sets
+    #     correct_train = 0
+    #     total_train = 0
+    #     correct_test = 0
+    #     total_test = 0
+    #     model.eval()
+    #     with torch.no_grad():
+    #         train_loss = 0.0
+    #         for data in trainloader:
+    #             images, labels = data
+    #             images, labels = images.to(device), labels.to(device)
+    #             outputs = model(images)
+    #             _, predicted = torch.max(outputs.data, 1)
+    #             train_loss += criterion(outputs, labels).item()
+    #             total_train += labels.size(0)
+    #             correct_train += (predicted == labels).sum().item()
 
-            test_loss = 0.0
-            for data in testloader:
-                images, labels = data
-                images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
-                _, predicted = torch.max(outputs.data, 1)
-                test_loss += criterion(outputs, labels).item()
-                total_test += labels.size(0)
-                correct_test += (predicted == labels).sum().item()
+    #         test_loss = 0.0
+    #         for data in testloader:
+    #             images, labels = data
+    #             images, labels = images.to(device), labels.to(device)
+    #             outputs = model(images)
+    #             _, predicted = torch.max(outputs.data, 1)
+    #             test_loss += criterion(outputs, labels).item()
+    #             total_test += labels.size(0)
+    #             correct_test += (predicted == labels).sum().item()
 
-        train_accuracy = 100 * correct_train / total_train
-        test_accuracy = 100 * correct_test / total_test
-        if test_accuracy > best:
-            best = test_accuracy
-            torch.save(model.state_dict(), save_path + "/best.pth")
+    #     train_accuracy = 100 * correct_train / total_train
+    #     test_accuracy = 100 * correct_test / total_test
+    #     if test_accuracy > best:
+    #         best = test_accuracy
+    #         torch.save(model.state_dict(), save_path + "/best.pth")
 
-        generalization_gap = train_accuracy - test_accuracy
-        generalization_loss = train_loss - test_loss
-        writer.add_scalar("train accuracy", train_accuracy, epoch)
-        writer.add_scalar("test accuracy", test_accuracy, epoch)
-        writer.add_scalar("train loss", train_loss / len(trainloader), epoch)
-        writer.add_scalar("test loss", test_loss / len(testloader), epoch)
-        writer.add_scalar("generalization gap", generalization_gap, epoch)
-        writer.add_scalar("generalization loss", generalization_loss, epoch)
+    #     generalization_gap = train_accuracy - test_accuracy
+    #     generalization_loss = train_loss - test_loss
+    #     writer.add_scalar("train accuracy", train_accuracy, epoch)
+    #     writer.add_scalar("test accuracy", test_accuracy, epoch)
+    #     writer.add_scalar("train loss", train_loss / len(trainloader), epoch)
+    #     writer.add_scalar("test loss", test_loss / len(testloader), epoch)
+    #     writer.add_scalar("generalization gap", generalization_gap, epoch)
+    #     writer.add_scalar("generalization loss", generalization_loss, epoch)
 
-    # Close TensorBoard writer
-    writer.close()
-    print("Finished Training")
-    print("Best test accuracy: {:.2f}%".format(best))
+    # # Close TensorBoard writer
+    # writer.close()
+    # print("Finished Training")
+    # print("Best test accuracy: {:.2f}%".format(best))
