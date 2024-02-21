@@ -23,8 +23,8 @@ def __getattr(model, name):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="PyTorch CIFAR10 Training")
-    parser.add_argument("-s", "--save", help="save path", default="test")
+    parser = argparse.ArgumentParser(description="PyTorch CIFAR100 Training")
+    parser.add_argument("-s", "--save", help="save path", default="0")
     parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
     parser.add_argument("-a", "--algorithm", help="prune algorithm", default="uniform")
     parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
@@ -40,28 +40,10 @@ if __name__ == "__main__":
         help="model",
         default=None,
     )
-    # only works in resnet_res
-    parser.add_argument(
-        "-a",
-        "--alpha",
-        help="alpha",
-        type=float,
-        default=None,
-    )
-    # only works in resnet_res
-    parser.add_argument(
-        "-b",
-        "--beta",
-        help="beta",
-        type=float,
-        default=None,
-    )
-
     args = parser.parse_args()
 
     # Set up TensorBoard writer with log directory
-    # save_path = f"logs/cifar10/{args.model}/{args.im}_p{args.prune:.2f}_r{args.restore}_no.{args.save}"
-    save_path = f"logs/cifar10/{args.model}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
+    save_path = f"logs/cifar100/{args.model}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
     writer = SummaryWriter(log_dir=save_path)
 
     # Load CIFAR-10 dataset
@@ -81,66 +63,29 @@ if __name__ == "__main__":
     )
 
     trainset = torchvision.datasets.CIFAR10(
-        root="~/Data/cifar10", train=True, download=True, transform=transform_train
+        root="~/Data/cifar100", train=True, download=True, transform=transform_train
     )
     trainloader = torch.utils.data.DataLoader(
         trainset, batch_size=256, shuffle=True, num_workers=4
     )
 
     testset = torchvision.datasets.CIFAR10(
-        root="~/Data/cifar10", train=False, download=True, transform=transform_test
+        root="~/Data/cifar100", train=False, download=True, transform=transform_test
     )
     testloader = torch.utils.data.DataLoader(
         testset, batch_size=256, shuffle=False, num_workers=4
     )
 
-    if args.model == "resnet20_wobn":
-        from models.resnet_wobn import resnet20
+    if args.model == "vgg16":
+        from torchvision.models import vgg16
 
-        model = resnet20()
-    elif args.model == "resnet20":
-        from models.resnet import resnet20
-
-        model = resnet20()
-    elif args.model == "resnet20_res":
-        from models.resnet_res import resnet20
-
-        model = resnet20(args.alpha, args.beta)
-    elif args.model == "vgg16":
-        from models.vgg16 import VGG16
-
-        model = VGG16()
+        model = vgg16(num_classes=100)
     elif args.model == "vgg16_bn":
-        from models.vgg16 import VGG16_BN
+        from torchvision.models import vgg16_bn
 
-        model = VGG16_BN()
-
-    elif args.model[:2] == "fc":
-        import models.fc as fc
-
-        # extract the number of layers from the model name like fc3 fc20 fc50_wobn
-        num_layers = int(args.model.split("_")[0][2:])
-
-        if args.model[-4:] == "wobn":
-            model = fc.FCN_WOBN(num_layers)
-        else:
-            model = fc.FCN(num_layers)
-
-    elif args.model[:4] == "conv":
-        import models.conv as conv
-
-        # extract the number of layers from the model name like conv3 conv20 conv50_wobn
-        num_layers = int(args.model.split("_")[0][4:])
-        if args.model[-4:] == "wobn":
-            model = conv.CONVN_WOBN(num_layers)
-        else:
-            model = conv.CONVN(num_layers)
-
+        model = vgg16_bn(num_classes=100)
     else:
-        print("No model specified, use fc3")
-        import models.fc as fc
-
-        model = fc.FCN(3)
+        raise ValueError("model not found")
 
     for m in model.modules():
         if isinstance(m, nn.Conv2d):
@@ -228,7 +173,10 @@ if __name__ == "__main__":
                     )
                     shape = m.weight.shape[1] * m.weight.shape[2] * m.weight.shape[3]
                     lv = spec_norm / torch.sqrt(0.5 * shape * m.weight.var())
-                    bn_name = n.replace("conv", "bn")
+                    name_split = n.split(".")
+                    bn_name = (
+                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
+                    )
                     try:
                         bn = __getattr(model, bn_name)
                         if not isinstance(bn, nn.BatchNorm2d):
@@ -245,7 +193,10 @@ if __name__ == "__main__":
                     lv = spec_norm / torch.sqrt(
                         0.5 * m.weight.shape[1] * m.weight.var()
                     )
-                    bn_name = n.replace("fc", "bn")
+                    name_split = n.split(".")
+                    bn_name = (
+                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
+                    )
                     try:
                         bn = __getattr(model, bn_name)
                         if not isinstance(bn, nn.BatchNorm1d):
@@ -269,7 +220,10 @@ if __name__ == "__main__":
                     m.weight.data /= spec_norm
                     if args.prune != 0.0:
                         m.weight_orig.data /= spec_norm
-                    bn_name = n.replace("conv", "bn")
+                    name_split = n.split(".")
+                    bn_name = (
+                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
+                    )
                     try:
                         bn = __getattr(model, bn_name)
                         if not isinstance(bn, nn.BatchNorm2d):
@@ -289,7 +243,10 @@ if __name__ == "__main__":
                     m.weight.data /= spec_norm
                     if args.prune != 0.0:
                         m.weight_orig.data /= spec_norm
-                    bn_name = n.replace("fc", "bn")
+                    name_split = n.split(".")
+                    bn_name = (
+                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
+                    )
                     try:
                         bn = __getattr(model, bn_name)
                         if not isinstance(bn, nn.BatchNorm1d):
@@ -316,7 +273,10 @@ if __name__ == "__main__":
                     if args.prune != 0.0:
                         m.weight_orig.data -= mean
                         m.weight_orig.data /= spec_norm
-                    bn_name = n.replace("conv", "bn")
+                    name_split = n.split(".")
+                    bn_name = (
+                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
+                    )
                     try:
                         bn = __getattr(model, bn_name)
                         if not isinstance(bn, nn.BatchNorm2d):
@@ -339,7 +299,10 @@ if __name__ == "__main__":
                     if args.prune != 0.0:
                         m.weight_orig.data -= mean
                         m.weight_orig.data /= spec_norm
-                    bn_name = n.replace("fc", "bn")
+                    name_split = n.split(".")
+                    bn_name = (
+                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
+                    )
                     try:
                         bn = __getattr(model, bn_name)
                         if not isinstance(bn, nn.BatchNorm1d):
