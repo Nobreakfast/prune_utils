@@ -68,43 +68,36 @@ def snip(model, dataloader):
     return score_dict
 
 
-def synflow(model, example_data):
-    @torch.no_grad()
-    def linearize(model):
-        for name, module in model.named_modules():
-            if isinstance(module, (nn.Conv2d, nn.Linear)):
-                module.weight.data = module.weight.data.abs()
-
-    @torch.no_grad()
-    def nonlinearize(model, signs_dict):
-        for name, module in model.named_modules():
-            if isinstance(module, (nn.Conv2d, nn.Linear)):
-                module.weight.data = signs_dict[name] * module.weight.data
-
-    device = next(model.parameters()).device
-    score_dict = {}
-    sign_dict = {}
+@torch.no_grad()
+def linearize(model):
     for name, module in model.named_modules():
         if isinstance(module, (nn.Conv2d, nn.Linear)):
-            score_dict[name] = torch.zeros_like(module.weight.data)
-            sign_dict[name] = torch.sign(module.weight.data).detach()
+            module.weight.data = module.weight.data.abs()
 
+
+@torch.no_grad()
+def nonlinearize(model, signs_dict):
+    for name, module in model.named_modules():
+        if isinstance(module, (nn.Conv2d, nn.Linear)):
+            module.weight.data = signs_dict[name] * module.weight.data
+
+
+def synflow(model, example_data):
+    device = next(model.parameters()).device
     input_dim = list(example_data[0, :].shape)
     inputs = torch.ones([1] + input_dim).to(device)
-
-    linearize(model)
     model.eval()
     output = model(inputs)
     torch.sum(output).backward()
+    score_dict = {}
     for name, module in model.named_modules():
         if isinstance(module, (nn.Conv2d, nn.Linear)):
-            score_dict[name] += (
+            score_dict[name] = (
                 module.weight.grad.data.detach().abs()
                 * module.weight.data.detach().abs()
             )
     model.zero_grad()
     model.train()
-    nonlinearize(model, sign_dict)
     return score_dict
 
 

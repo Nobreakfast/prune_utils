@@ -63,14 +63,14 @@ if __name__ == "__main__":
         ]
     )
 
-    trainset = torchvision.datasets.CIFAR10(
+    trainset = torchvision.datasets.CIFAR100(
         root="~/Data/cifar100", train=True, download=True, transform=transform_train
     )
     trainloader = torch.utils.data.DataLoader(
         trainset, batch_size=256, shuffle=True, num_workers=4
     )
 
-    testset = torchvision.datasets.CIFAR10(
+    testset = torchvision.datasets.CIFAR100(
         root="~/Data/cifar100", train=False, download=True, transform=transform_test
     )
     testloader = torch.utils.data.DataLoader(
@@ -132,14 +132,20 @@ if __name__ == "__main__":
             apply_prune(model, score_dict, threshold)
         elif args.algorithm == "synflow":
             example_data, _ = next(iter(trainloader))
+            sign_dict = {}
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear)):
+                    sign_dict[name] = torch.sign(module.weight.data).detach()
+            linearize(model)
             iterations = 100
-            for i in range(iterations):
+            for i in tqdm.trange(iterations):
                 prune_ratio = args.prune / iterations * (i + 1)
                 score_dict = synflow(model, example_data)
                 threshold = cal_threshold(score_dict, prune_ratio)
                 apply_prune(model, score_dict, threshold)
                 if i != iterations - 1:
                     remove_mask(model)
+            nonlinearize(model, sign_dict)
         else:
             for name, m in model.named_modules():
                 if isinstance(m, nn.Conv2d):

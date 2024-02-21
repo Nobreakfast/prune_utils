@@ -43,12 +43,12 @@ do
     python cifar100.py -m vgg16_bn -i kaiming_in -r 2 -a uniform -p $i -s $1
     python cifar100.py -m vgg16_bn -i kaiming_in -r 4 -a uniform -p $i -s $1
     # synflow
-    python cifar100.py -m vgg16_bn -i xavier -r 0 -a synflow -p $i -s $1
+    # python cifar100.py -m vgg16_bn -i xavier -r 0 -a synflow -p $i -s $1
     # python cifar100.py -m vgg16_bn -i kaiming_in -r 0 -a synflow -p $i -s $1
     # python cifar100.py -m vgg16_bn -i kaiming_out -r 0 -a synflow -p $i -s $1
-    python cifar100.py -m vgg16_bn -i kaiming_in -r 5 -a synflow -p $i -s $1
-    python cifar100.py -m vgg16_bn -i kaiming_in -r 2 -a synflow -p $i -s $1
-    python cifar100.py -m vgg16_bn -i kaiming_in -r 4 -a synflow -p $i -s $1
+    # python cifar100.py -m vgg16_bn -i kaiming_in -r 5 -a synflow -p $i -s $1
+    # python cifar100.py -m vgg16_bn -i kaiming_in -r 2 -a synflow -p $i -s $1
+    # python cifar100.py -m vgg16_bn -i kaiming_in -r 4 -a synflow -p $i -s $1
     # snip
     python cifar100.py -m vgg16_bn -i xavier -r 0 -a snip -p $i -s $1
     # python cifar100.py -m vgg16_bn -i kaiming_in -r 0 -a snip -p $i -s $1
