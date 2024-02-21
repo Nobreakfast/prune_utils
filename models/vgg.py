@@ -72,4 +72,14 @@ def vgg16_bn():
 def vgg19_bn():
     return VGG(make_layers(cfg['E'], batch_norm=True))
 
+def vgg11():
+    return VGG(make_layers(cfg['A'], batch_norm=False))
 
+def vgg13():
+    return VGG(make_layers(cfg['B'], batch_norm=False))
+
+def vgg16():
+    return VGG(make_layers(cfg['D'], batch_norm=False))
+
+def vgg19():
+    return VGG(make_layers(cfg['E'], batch_norm=False))

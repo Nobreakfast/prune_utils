@@ -78,13 +78,13 @@ if __name__ == "__main__":
     )
 
     if args.model == "vgg16":
-        from torchvision.models import vgg16
+        from models.vgg import vgg16
 
-        model = vgg16(num_classes=100)
+        model = vgg16()
     elif args.model == "vgg16_bn":
         from models.vgg import vgg16_bn
 
-        model = vgg16_bn(num_classes=100)
+        model = vgg16_bn()
     else:
         raise ValueError("model not found")
 
