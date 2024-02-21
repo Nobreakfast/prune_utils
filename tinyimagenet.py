@@ -320,72 +320,72 @@ if __name__ == "__main__":
     )
 
     # Training loop
-    # best = 0
-    # for epoch in tqdm.trange(160):
-    #     running_loss = 0.0
-    #     model.train()
-    #     for i, data in enumerate(trainloader, 0):
-    #         inputs, labels = data
-    #         inputs, labels = inputs.to(device), labels.to(device)
+    best = 0
+    for epoch in tqdm.trange(160):
+        running_loss = 0.0
+        model.train()
+        for i, data in enumerate(trainloader, 0):
+            inputs, labels = data
+            inputs, labels = inputs.to(device), labels.to(device)
 
-    #         optimizer.zero_grad()
+            optimizer.zero_grad()
 
-    #         outputs = model(inputs)
-    #         loss = criterion(outputs, labels)
-    #         loss.backward()
-    #         optimizer.step()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
-    #         running_loss += loss.item()
-    #         if i % 200 == 199:
-    #             writer.add_scalar(
-    #                 "training loss", running_loss / 200, epoch * len(trainloader) + i
-    #             )
-    #             running_loss = 0.0
-    #     scheduler.step()
+            running_loss += loss.item()
+            if i % 200 == 199:
+                writer.add_scalar(
+                    "training loss", running_loss / 200, epoch * len(trainloader) + i
+                )
+                running_loss = 0.0
+        scheduler.step()
 
-    #     # Calculate accuracy on train and test sets
-    #     correct_train = 0
-    #     total_train = 0
-    #     correct_test = 0
-    #     total_test = 0
-    #     model.eval()
-    #     with torch.no_grad():
-    #         train_loss = 0.0
-    #         for data in trainloader:
-    #             images, labels = data
-    #             images, labels = images.to(device), labels.to(device)
-    #             outputs = model(images)
-    #             _, predicted = torch.max(outputs.data, 1)
-    #             train_loss += criterion(outputs, labels).item()
-    #             total_train += labels.size(0)
-    #             correct_train += (predicted == labels).sum().item()
+        # Calculate accuracy on train and test sets
+        correct_train = 0
+        total_train = 0
+        correct_test = 0
+        total_test = 0
+        model.eval()
+        with torch.no_grad():
+            train_loss = 0.0
+            for data in trainloader:
+                images, labels = data
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                _, predicted = torch.max(outputs.data, 1)
+                train_loss += criterion(outputs, labels).item()
+                total_train += labels.size(0)
+                correct_train += (predicted == labels).sum().item()
 
-    #         test_loss = 0.0
-    #         for data in testloader:
-    #             images, labels = data
-    #             images, labels = images.to(device), labels.to(device)
-    #             outputs = model(images)
-    #             _, predicted = torch.max(outputs.data, 1)
-    #             test_loss += criterion(outputs, labels).item()
-    #             total_test += labels.size(0)
-    #             correct_test += (predicted == labels).sum().item()
+            test_loss = 0.0
+            for data in testloader:
+                images, labels = data
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                _, predicted = torch.max(outputs.data, 1)
+                test_loss += criterion(outputs, labels).item()
+                total_test += labels.size(0)
+                correct_test += (predicted == labels).sum().item()
 
-    #     train_accuracy = 100 * correct_train / total_train
-    #     test_accuracy = 100 * correct_test / total_test
-    #     if test_accuracy > best:
-    #         best = test_accuracy
-    #         torch.save(model.state_dict(), save_path + "/best.pth")
+        train_accuracy = 100 * correct_train / total_train
+        test_accuracy = 100 * correct_test / total_test
+        if test_accuracy > best:
+            best = test_accuracy
+            torch.save(model.state_dict(), save_path + "/best.pth")
 
-    #     generalization_gap = train_accuracy - test_accuracy
-    #     generalization_loss = train_loss - test_loss
-    #     writer.add_scalar("train accuracy", train_accuracy, epoch)
-    #     writer.add_scalar("test accuracy", test_accuracy, epoch)
-    #     writer.add_scalar("train loss", train_loss / len(trainloader), epoch)
-    #     writer.add_scalar("test loss", test_loss / len(testloader), epoch)
-    #     writer.add_scalar("generalization gap", generalization_gap, epoch)
-    #     writer.add_scalar("generalization loss", generalization_loss, epoch)
+        generalization_gap = train_accuracy - test_accuracy
+        generalization_loss = train_loss - test_loss
+        writer.add_scalar("train accuracy", train_accuracy, epoch)
+        writer.add_scalar("test accuracy", test_accuracy, epoch)
+        writer.add_scalar("train loss", train_loss / len(trainloader), epoch)
+        writer.add_scalar("test loss", test_loss / len(testloader), epoch)
+        writer.add_scalar("generalization gap", generalization_gap, epoch)
+        writer.add_scalar("generalization loss", generalization_loss, epoch)
 
-    # # Close TensorBoard writer
-    # writer.close()
-    # print("Finished Training")
-    # print("Best test accuracy: {:.2f}%".format(best))
+    # Close TensorBoard writer
+    writer.close()
+    print("Finished Training")
+    print("Best test accuracy: {:.2f}%".format(best))
