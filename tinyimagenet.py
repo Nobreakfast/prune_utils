@@ -8,6 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 import argparse
 import tqdm
 from prune_utils.pai import *
+from data.tinyimagenet import tinyimagenet
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -24,8 +25,8 @@ def __getattr(model, name):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="PyTorch CIFAR10 Training")
-    parser.add_argument("-s", "--save", help="save path", default="test")
+    parser = argparse.ArgumentParser(description="PyTorch TinyImageNet Training")
+    parser.add_argument("-s", "--save", help="save path", default="0")
     parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
     parser.add_argument("-a", "--algorithm", help="prune algorithm", default="nonprune")
     parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
@@ -46,100 +47,33 @@ if __name__ == "__main__":
         "--alpha",
         help="alpha",
         type=float,
-        default=1.0,
+        default=1,
     )
     # only works in resnet_res
     parser.add_argument(
         "--beta",
         help="beta",
         type=float,
-        default=1.0,
+        default=1,
     )
-
     args = parser.parse_args()
 
     # Set up TensorBoard writer with log directory
-    # save_path = f"logs/cifar10/{args.model}/{args.im}_p{args.prune:.2f}_r{args.restore}_no.{args.save}"
-    save_path = f"logs/cifar10/{args.model}/{args.im}/{args.algorithm}/{args.prune:.2f}r{args.restore}/no.{args.save}"
+    save_path = f"logs/tinyimagenet/{args.model}_{args.alpha}_{args.beta}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
     writer = SummaryWriter(log_dir=save_path)
 
-    # Load CIFAR-10 dataset
-    transform_train = transforms.Compose(
-        [
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-        ]
-    )
-    transform_test = transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-        ]
-    )
+    [trainloader, testloader] = tinyimagenet(128, "~/Data/tiny-imagenet-200", 4)
 
-    trainset = torchvision.datasets.CIFAR10(
-        root="~/Data/cifar10", train=True, download=True, transform=transform_train
-    )
-    trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=256, shuffle=True, num_workers=4
-    )
+    if args.model == "resnet18":
+        from models.resnet_ori import resnet18
 
-    testset = torchvision.datasets.CIFAR10(
-        root="~/Data/cifar10", train=False, download=True, transform=transform_test
-    )
-    testloader = torch.utils.data.DataLoader(
-        testset, batch_size=256, shuffle=False, num_workers=4
-    )
+        model = resnet18(num_classes=200)
+    elif args.model == "resnet18_res":
+        from models.resnet_ori_res import resnet18
 
-    if args.model == "resnet20_wobn":
-        from models.resnet_wobn import resnet20
-
-        model = resnet20()
-    elif args.model == "resnet20":
-        from models.resnet import resnet20
-
-        model = resnet20()
-    elif args.model == "resnet20_res":
-        from models.resnet_res import resnet20
-
-        model = resnet20(args.alpha, args.beta)
-    elif args.model == "vgg16":
-        from models.vgg16 import VGG16
-
-        model = VGG16()
-    elif args.model == "vgg16_bn":
-        from models.vgg16 import VGG16_BN
-
-        model = VGG16_BN()
-
-    elif args.model[:2] == "fc":
-        import models.fc as fc
-
-        # extract the number of layers from the model name like fc3 fc20 fc50_wobn
-        num_layers = int(args.model.split("_")[0][2:])
-
-        if args.model[-4:] == "wobn":
-            model = fc.FCN_WOBN(num_layers)
-        else:
-            model = fc.FCN(num_layers)
-
-    elif args.model[:4] == "conv":
-        import models.conv as conv
-
-        # extract the number of layers from the model name like conv3 conv20 conv50_wobn
-        num_layers = int(args.model.split("_")[0][4:])
-        if args.model[-4:] == "wobn":
-            model = conv.CONVN_WOBN(num_layers)
-        else:
-            model = conv.CONVN(num_layers)
-
+        model = resnet18(num_classes=200, alpha=args.alpha, beta=args.beta)
     else:
-        print("No model specified, use fc3")
-        import models.fc as fc
-
-        model = fc.FCN(3)
+        raise ValueError("model not found")
 
     for m in model.modules():
         if isinstance(m, nn.Conv2d):
@@ -185,6 +119,11 @@ if __name__ == "__main__":
             apply_prune(model, score_dict, threshold)
         elif args.algorithm == "synflow":
             example_data, _ = next(iter(trainloader))
+            sign_dict = {}
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear)):
+                    sign_dict[name] = torch.sign(module.weight.data).detach()
+            linearize(model)
             iterations = 100
             for i in range(iterations):
                 prune_ratio = args.prune / iterations * (i + 1)
@@ -193,6 +132,7 @@ if __name__ == "__main__":
                 apply_prune(model, score_dict, threshold)
                 if i != iterations - 1:
                     remove_mask(model)
+            nonlinearize(model, sign_dict)
         else:
             for name, m in model.named_modules():
                 if isinstance(m, nn.Conv2d):
@@ -380,72 +320,72 @@ if __name__ == "__main__":
     )
 
     # Training loop
-    best = 0
-    for epoch in tqdm.trange(160):
-        running_loss = 0.0
-        model.train()
-        for i, data in enumerate(trainloader, 0):
-            inputs, labels = data
-            inputs, labels = inputs.to(device), labels.to(device)
+    # best = 0
+    # for epoch in tqdm.trange(160):
+    #     running_loss = 0.0
+    #     model.train()
+    #     for i, data in enumerate(trainloader, 0):
+    #         inputs, labels = data
+    #         inputs, labels = inputs.to(device), labels.to(device)
 
-            optimizer.zero_grad()
+    #         optimizer.zero_grad()
 
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
+    #         outputs = model(inputs)
+    #         loss = criterion(outputs, labels)
+    #         loss.backward()
+    #         optimizer.step()
 
-            running_loss += loss.item()
-            if i % 200 == 199:
-                writer.add_scalar(
-                    "training loss", running_loss / 200, epoch * len(trainloader) + i
-                )
-                running_loss = 0.0
-        scheduler.step()
+    #         running_loss += loss.item()
+    #         if i % 200 == 199:
+    #             writer.add_scalar(
+    #                 "training loss", running_loss / 200, epoch * len(trainloader) + i
+    #             )
+    #             running_loss = 0.0
+    #     scheduler.step()
 
-        # Calculate accuracy on train and test sets
-        correct_train = 0
-        total_train = 0
-        correct_test = 0
-        total_test = 0
-        model.eval()
-        with torch.no_grad():
-            train_loss = 0.0
-            for data in trainloader:
-                images, labels = data
-                images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
-                _, predicted = torch.max(outputs.data, 1)
-                train_loss += criterion(outputs, labels).item()
-                total_train += labels.size(0)
-                correct_train += (predicted == labels).sum().item()
+    #     # Calculate accuracy on train and test sets
+    #     correct_train = 0
+    #     total_train = 0
+    #     correct_test = 0
+    #     total_test = 0
+    #     model.eval()
+    #     with torch.no_grad():
+    #         train_loss = 0.0
+    #         for data in trainloader:
+    #             images, labels = data
+    #             images, labels = images.to(device), labels.to(device)
+    #             outputs = model(images)
+    #             _, predicted = torch.max(outputs.data, 1)
+    #             train_loss += criterion(outputs, labels).item()
+    #             total_train += labels.size(0)
+    #             correct_train += (predicted == labels).sum().item()
 
-            test_loss = 0.0
-            for data in testloader:
-                images, labels = data
-                images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
-                _, predicted = torch.max(outputs.data, 1)
-                test_loss += criterion(outputs, labels).item()
-                total_test += labels.size(0)
-                correct_test += (predicted == labels).sum().item()
+    #         test_loss = 0.0
+    #         for data in testloader:
+    #             images, labels = data
+    #             images, labels = images.to(device), labels.to(device)
+    #             outputs = model(images)
+    #             _, predicted = torch.max(outputs.data, 1)
+    #             test_loss += criterion(outputs, labels).item()
+    #             total_test += labels.size(0)
+    #             correct_test += (predicted == labels).sum().item()
 
-        train_accuracy = 100 * correct_train / total_train
-        test_accuracy = 100 * correct_test / total_test
-        if test_accuracy > best:
-            best = test_accuracy
-            torch.save(model.state_dict(), save_path + "/best.pth")
+    #     train_accuracy = 100 * correct_train / total_train
+    #     test_accuracy = 100 * correct_test / total_test
+    #     if test_accuracy > best:
+    #         best = test_accuracy
+    #         torch.save(model.state_dict(), save_path + "/best.pth")
 
-        generalization_gap = train_accuracy - test_accuracy
-        generalization_loss = train_loss - test_loss
-        writer.add_scalar("train accuracy", train_accuracy, epoch)
-        writer.add_scalar("test accuracy", test_accuracy, epoch)
-        writer.add_scalar("train loss", train_loss / len(trainloader), epoch)
-        writer.add_scalar("test loss", test_loss / len(testloader), epoch)
-        writer.add_scalar("generalization gap", generalization_gap, epoch)
-        writer.add_scalar("generalization loss", generalization_loss, epoch)
+    #     generalization_gap = train_accuracy - test_accuracy
+    #     generalization_loss = train_loss - test_loss
+    #     writer.add_scalar("train accuracy", train_accuracy, epoch)
+    #     writer.add_scalar("test accuracy", test_accuracy, epoch)
+    #     writer.add_scalar("train loss", train_loss / len(trainloader), epoch)
+    #     writer.add_scalar("test loss", test_loss / len(testloader), epoch)
+    #     writer.add_scalar("generalization gap", generalization_gap, epoch)
+    #     writer.add_scalar("generalization loss", generalization_loss, epoch)
 
-    # Close TensorBoard writer
-    writer.close()
-    print("Finished Training")
-    print("Best test accuracy: {:.2f}%".format(best))
+    # # Close TensorBoard writer
+    # writer.close()
+    # print("Finished Training")
+    # print("Best test accuracy: {:.2f}%".format(best))

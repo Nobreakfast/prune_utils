@@ -43,6 +43,8 @@ class BasicBlock(nn.Module):
         base_width: int = 64,
         dilation: int = 1,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
+        alpha: float = 1,
+        beta: float = 1,
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -59,6 +61,17 @@ class BasicBlock(nn.Module):
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
         self.stride = stride
+
+        if alpha is not None and alpha != 1.0:
+            self.alpha = nn.Parameter(torch.ones(1, planes, 1, 1, requires_grad=True))
+            self.alpha.data.fill_(alpha)
+        else:
+            self.alpha = 1.0
+        if beta is not None and beta != 1.0:
+            self.beta = nn.Parameter(torch.ones(1, planes, 1, 1, requires_grad=True))
+            self.beta.data.fill_(beta)
+        else:
+            self.beta = 1.0
 
         init.kaiming_normal_(self.conv1.weight, mode="fan_out", nonlinearity="relu")
         self.conv1.weight.data.mul_(0.5**0.5)
@@ -78,53 +91,8 @@ class BasicBlock(nn.Module):
         if self.downsample is not None:
             identity = self.downsample(x)
 
-        out += identity
-        out = self.relu(out)
-
-        return out
-
-
-class BasicBlock_reduced(nn.Module):
-    expansion: int = 1
-
-    def __init__(
-        self,
-        inplanes: int,
-        planes: int,
-        stride: int = 1,
-        downsample: Optional[nn.Module] = None,
-        groups: int = 1,
-        base_width: int = 64,
-        dilation: int = 1,
-        norm_layer: Optional[Callable[..., nn.Module]] = None,
-    ) -> None:
-        super().__init__()
-        if norm_layer is None:
-            norm_layer = nn.BatchNorm2d
-        if groups != 1 or base_width != 64:
-            raise ValueError("BasicBlock only supports groups=1 and base_width=64")
-        if dilation > 1:
-            raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
-        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        # self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = norm_layer(planes)
-        self.relu = nn.ReLU(inplace=True)
-        # self.conv2 = conv3x3(planes, planes)
-        self.bn2 = norm_layer(planes)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x: Tensor) -> Tensor:
-        identity = x
-        if self.downsample is not None:
-            identity = self.downsample(x)
-            out = identity
-            return out
-
-        out = self.bn1(x)
-        out = self.bn2(out)
-
-        out += identity
+        # out += identity
+        out = self.beta * out + self.alpha * identity
         out = self.relu(out)
 
         return out
@@ -149,6 +117,8 @@ class Bottleneck(nn.Module):
         base_width: int = 64,
         dilation: int = 1,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
+        alpha: float = 1,
+        beta: float = 1,
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -164,6 +134,17 @@ class Bottleneck(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
+
+        if alpha is not None and alpha != 1.0:
+            self.alpha = nn.Parameter(torch.ones(1, planes, 1, 1, requires_grad=True))
+            self.alpha.data.fill_(alpha)
+        else:
+            self.alpha = 1.0
+        if beta is not None and beta != 1.0:
+            self.beta = nn.Parameter(torch.ones(1, planes, 1, 1, requires_grad=True))
+            self.beta.data.fill_(beta)
+        else:
+            self.beta = 1.0
 
     def forward(self, x: Tensor) -> Tensor:
         identity = x
@@ -182,7 +163,8 @@ class Bottleneck(nn.Module):
         if self.downsample is not None:
             identity = self.downsample(x)
 
-        out += identity
+        # out += identity
+        out = self.beta * out + self.alpha * identity
         out = self.relu(out)
 
         return out
@@ -191,7 +173,7 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
     def __init__(
         self,
-        block: Type[Union[BasicBlock, BasicBlock_reduced, Bottleneck]],
+        block: Type[Union[BasicBlock, Bottleneck]],
         layers: List[int],
         num_classes: int = 1000,
         zero_init_residual: bool = False,
@@ -199,9 +181,12 @@ class ResNet(nn.Module):
         width_per_group: int = 64,
         replace_stride_with_dilation: Optional[List[bool]] = None,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        reduced: bool = False,
+        alpha: float = 1,
+        beta: float = 1,
     ) -> None:
         super().__init__()
+        self.alpha = alpha
+        self.beta = beta
         # _log_api_usage_once(self)
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
@@ -235,23 +220,15 @@ class ResNet(nn.Module):
             stride=2,
             dilate=replace_stride_with_dilation[0],
         )
-        if reduced:
-            new_block = BasicBlock_reduced
-        else:
-            new_block = block
         self.layer3 = self._make_layer(
-            new_block,
+            block,
             256,
             layers[2],
             stride=2,
             dilate=replace_stride_with_dilation[1],
         )
-        if reduced:
-            new_block = BasicBlock_reduced
-        else:
-            new_block = block
         self.layer4 = self._make_layer(
-            new_block,
+            block,
             512,
             layers[3],
             stride=2,
@@ -319,6 +296,8 @@ class ResNet(nn.Module):
                 self.base_width,
                 previous_dilation,
                 norm_layer,
+                alpha=self.alpha,
+                beta=self.beta,
             )
         )
 
@@ -332,6 +311,8 @@ class ResNet(nn.Module):
                     base_width=self.base_width,
                     dilation=self.dilation,
                     norm_layer=norm_layer,
+                    alpha=self.alpha,
+                    beta=self.beta,
                 )
             )
 

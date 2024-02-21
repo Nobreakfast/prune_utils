@@ -84,52 +84,6 @@ class BasicBlock(nn.Module):
         return out
 
 
-class BasicBlock_reduced(nn.Module):
-    expansion: int = 1
-
-    def __init__(
-        self,
-        inplanes: int,
-        planes: int,
-        stride: int = 1,
-        downsample: Optional[nn.Module] = None,
-        groups: int = 1,
-        base_width: int = 64,
-        dilation: int = 1,
-        norm_layer: Optional[Callable[..., nn.Module]] = None,
-    ) -> None:
-        super().__init__()
-        if norm_layer is None:
-            norm_layer = nn.BatchNorm2d
-        if groups != 1 or base_width != 64:
-            raise ValueError("BasicBlock only supports groups=1 and base_width=64")
-        if dilation > 1:
-            raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
-        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        # self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = norm_layer(planes)
-        self.relu = nn.ReLU(inplace=True)
-        # self.conv2 = conv3x3(planes, planes)
-        self.bn2 = norm_layer(planes)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x: Tensor) -> Tensor:
-        identity = x
-        if self.downsample is not None:
-            identity = self.downsample(x)
-            out = identity
-            return out
-
-        out = self.bn1(x)
-        out = self.bn2(out)
-
-        out += identity
-        out = self.relu(out)
-
-        return out
-
-
 class Bottleneck(nn.Module):
     # Bottleneck in torchvision places the stride for downsampling at 3x3 convolution(self.conv2)
     # while original implementation places the stride at the first 1x1 convolution(self.conv1)
@@ -191,7 +145,7 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
     def __init__(
         self,
-        block: Type[Union[BasicBlock, BasicBlock_reduced, Bottleneck]],
+        block: Type[Union[BasicBlock, Bottleneck]],
         layers: List[int],
         num_classes: int = 1000,
         zero_init_residual: bool = False,
@@ -199,7 +153,6 @@ class ResNet(nn.Module):
         width_per_group: int = 64,
         replace_stride_with_dilation: Optional[List[bool]] = None,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        reduced: bool = False,
     ) -> None:
         super().__init__()
         # _log_api_usage_once(self)
@@ -235,23 +188,15 @@ class ResNet(nn.Module):
             stride=2,
             dilate=replace_stride_with_dilation[0],
         )
-        if reduced:
-            new_block = BasicBlock_reduced
-        else:
-            new_block = block
         self.layer3 = self._make_layer(
-            new_block,
+            block,
             256,
             layers[2],
             stride=2,
             dilate=replace_stride_with_dilation[1],
         )
-        if reduced:
-            new_block = BasicBlock_reduced
-        else:
-            new_block = block
         self.layer4 = self._make_layer(
-            new_block,
+            block,
             512,
             layers[3],
             stride=2,
