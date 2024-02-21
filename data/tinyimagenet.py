@@ -7,7 +7,7 @@ from .core import custom_datasets
 
 
 def tinyimagenet(batch_size, path, workers):
-    os.system(f"mkdir -p {path}")
+    # os.system(f"mkdir -p {path}")
     transform_train = transforms.Compose(
         [
             transforms.RandomCrop(64, padding=4),

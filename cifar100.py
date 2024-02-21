@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
         model = vgg16(num_classes=100)
     elif args.model == "vgg16_bn":
-        from torchvision.models import vgg16_bn
+        from models.vgg import vgg16_bn
 
         model = vgg16_bn(num_classes=100)
     else:
