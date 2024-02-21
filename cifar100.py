@@ -138,7 +138,7 @@ if __name__ == "__main__":
                     sign_dict[name] = torch.sign(module.weight.data).detach()
             linearize(model)
             iterations = 100
-            for i in tqdm.trange(iterations):
+            for i in range(iterations):
                 prune_ratio = args.prune / iterations * (i + 1)
                 score_dict = synflow(model, example_data)
                 threshold = cal_threshold(score_dict, prune_ratio)
