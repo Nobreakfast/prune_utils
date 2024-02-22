@@ -70,16 +70,19 @@ def snip(model, dataloader):
 
 @torch.no_grad()
 def linearize(model):
+    signs_dict = {}
     for name, module in model.named_modules():
         if isinstance(module, (nn.Conv2d, nn.Linear)):
-            module.weight.data = module.weight.data.abs()
+            signs_dict[name] = module.weight.data.sign()
+            module.weight.data.abs_()
+    return signs_dict
 
 
 @torch.no_grad()
 def nonlinearize(model, signs_dict):
     for name, module in model.named_modules():
         if isinstance(module, (nn.Conv2d, nn.Linear)):
-            module.weight.data = signs_dict[name] * module.weight.data
+            module.weight.data.mul_(signs_dict[name])
 
 
 def synflow(model, example_data):
@@ -108,11 +111,17 @@ def apply_prune(model, score_dict, threshold):
             UnstructuredIndice.apply(module, "weight", indices)
 
 
+# def cal_threshold(score_dict, ratio):
+#     all_scores = torch.cat([torch.flatten(x) for x in score_dict.values()])
+#     num_params_to_keep = int(len(all_scores) * (1 - ratio))
+#     threshold, _ = torch.topk(all_scores, num_params_to_keep, sorted=True)
+#     return threshold[-1]
+
+
 def cal_threshold(score_dict, ratio):
     all_scores = torch.cat([torch.flatten(x) for x in score_dict.values()])
-    num_params_to_keep = int(len(all_scores) * (1 - ratio))
-    threshold, _ = torch.topk(all_scores, num_params_to_keep, sorted=True)
-    return threshold[-1]
+    threshold = torch.kthvalue(all_scores, int(len(all_scores) * (ratio)))[0]
+    return threshold
 
 
 def cal_sparsity(model):

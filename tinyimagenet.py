@@ -118,20 +118,29 @@ if __name__ == "__main__":
             threshold = cal_threshold(score_dict, args.prune)
             apply_prune(model, score_dict, threshold)
         elif args.algorithm == "synflow":
-            example_data, _ = next(iter(trainloader))
-            sign_dict = {}
-            for name, module in model.named_modules():
-                if isinstance(module, (nn.Conv2d, nn.Linear)):
-                    sign_dict[name] = torch.sign(module.weight.data).detach()
-            linearize(model)
+            # import time
+            # t_start = time.time()
+            # example_data, _ = next(iter(trainloader))
+            example_data = torch.randn(1, 3, 64, 64)
+            sign_dict = linearize(model)
             iterations = 100
+            # t_loop_start = time.time()
+            # print("ready time: ", t_loop_start - t_start)
             for i in range(iterations):
+                # t_loop_start = time.time()
                 prune_ratio = args.prune / iterations * (i + 1)
                 score_dict = synflow(model, example_data)
+                # t_score = time.time()
                 threshold = cal_threshold(score_dict, prune_ratio)
+                # t_threshold = time.time()
                 apply_prune(model, score_dict, threshold)
+                # t_apply = time.time()
                 if i != iterations - 1:
                     remove_mask(model)
+                # t_remove = time.time()
+                # print(
+                #     f"iter {i+1}/{iterations}, score: {t_score-t_loop_start:.2f}, threshold: {t_threshold-t_score:.2f}, apply: {t_apply-t_threshold:.2f}, remove: {t_remove-t_apply:.2f}"
+                # )
             nonlinearize(model, sign_dict)
         else:
             for name, m in model.named_modules():
@@ -139,7 +148,10 @@ if __name__ == "__main__":
                     prune.random_unstructured(m, name="weight", amount=args.prune)
                 elif isinstance(m, nn.Linear):
                     prune.random_unstructured(m, name="weight", amount=args.prune)
-        print(f"Pruned Sparsity: {cal_sparsity(model)}%")
+        print(f"Pruned Sparsity: {cal_sparsity(model)}")
+        for name, m in model.named_modules():
+            if isinstance(m, (nn.Conv2d, nn.Linear)):
+                print(f"{name} sparsity: {cal_sparsity(m)}")
 
     if args.restore != 0:
         print("restoring !!!!")
