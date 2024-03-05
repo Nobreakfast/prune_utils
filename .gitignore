@@ -1,6 +1,7 @@
 logs*/*
 results*/*
-*_v1path/*
+*path/*
+# *_v2path/*
 # Created by https://www.toptal.com/developers/gitignore/api/macos,emacs,vim,visualstudiocode,python,jetbrains+all,c++
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos,emacs,vim,visualstudiocode,python,jetbrains+all,c++
 
