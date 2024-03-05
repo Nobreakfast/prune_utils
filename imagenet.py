@@ -85,8 +85,8 @@ def train(
     for epoch in tqdm.trange(100):
         running_loss = 0.0
         model.train()
-        # for i, data in enumerate(trainloader, 0):
-        for i, data in tqdm.tqdm(enumerate(trainloader, 0), total=len(trainloader)):
+        for i, data in enumerate(trainloader, 0):
+            # for i, data in tqdm.tqdm(enumerate(trainloader, 0), total=len(trainloader)):
             inputs, labels = data
             inputs, labels = inputs.to(device), labels.to(device)
 
@@ -147,7 +147,7 @@ def parallel_main(rank, world_size, args):
     init_parallel(rank, world_size)
 
     # Set up TensorBoard writer with log directory
-    save_path = f"logs/tinyimagenet/{args.model}_{args.alpha}_{args.beta}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
+    save_path = f"logs/imagenet/{args.model}_{args.alpha}_{args.beta}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
     writer = SummaryWriter(log_dir=save_path)
 
     if args.model == "resnet50":
@@ -420,8 +420,8 @@ def parallel_main(rank, world_size, args):
         optimizer, milestones=[30, 60, 80], gamma=0.1
     )
     train(
-        trainloader,
-        testloader,
+        trainset,
+        testset,
         model,
         criterion,
         optimizer,
