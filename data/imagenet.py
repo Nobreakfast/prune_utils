@@ -4,6 +4,14 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 
+from torch.utils.data import DataLoader
+from prefetch_generator import BackgroundGenerator
+
+
+class DataLoaderX(DataLoader):
+    def __iter__(self):
+        return BackgroundGenerator(super().__iter__())
+
 
 def imagenet(batch_size, path, workers):
     transform_train = transforms.Compose(
@@ -22,7 +30,8 @@ def imagenet(batch_size, path, workers):
     )
     transform_test = transforms.Compose(
         [
-            transforms.Resize(225),
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ]
@@ -31,14 +40,22 @@ def imagenet(batch_size, path, workers):
     trainset = torchvision.datasets.ImageFolder(
         root=os.path.join(path, "train"), transform=transform_train
     )
-    trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=batch_size, shuffle=True, num_workers=workers
+    trainloader = DataLoaderX(
+        trainset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=workers,
+        pin_memory=True,
     )
     testset = torchvision.datasets.ImageFolder(
         root=os.path.join(path, "val"), transform=transform_test
     )
-    testloader = torch.utils.data.DataLoader(
-        testset, batch_size=batch_size * 8, shuffle=False, num_workers=workers
+    testloader = DataLoaderX(
+        testset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=workers,
+        pin_memory=True,
     )
 
     return [trainloader, testloader]

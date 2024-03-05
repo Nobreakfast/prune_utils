@@ -10,6 +10,33 @@ import tqdm
 from prune_utils.pai import *
 from data.imagenet import imagenet
 
+import os, random
+import torch.distributed as dist
+import torch.multiprocessing as mp
+
+
+def init_parallel(rank, world_size):
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12345"
+    dist.init_process_group(
+        "nccl" if torch.cuda.is_available() else "gloo",
+        rank=rank,
+        world_size=world_size,
+    )
+
+
+def init_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+
+def parallel_main(rank, world_size):
+    init_seed(999)
+    init_parallel(rank, world_size)
+    print(f"process running, rank={rank}")
+
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -62,7 +89,7 @@ if __name__ == "__main__":
     save_path = f"logs/tinyimagenet/{args.model}_{args.alpha}_{args.beta}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
     writer = SummaryWriter(log_dir=save_path)
 
-    [trainloader, testloader] = imagenet(128, "~/data3/imagenet", 4)
+    [trainloader, testloader] = imagenet(64, "~/data3/imagenet", 4)
 
     if args.model == "resnet50":
         from models.resnet_ori import resnet50
@@ -89,7 +116,8 @@ if __name__ == "__main__":
                     m.weight.view(m.weight.shape[0], -1), ord=2
                 )
             else:
-                print("No initialization method specified")
+                # print("No initialization method specified")
+                pass
         elif isinstance(m, nn.Linear):
             if args.im == "xavier":
                 nn.init.xavier_normal_(m.weight, gain=nn.init.calculate_gain("relu"))
@@ -101,7 +129,8 @@ if __name__ == "__main__":
                 m.weight.data = torch.randn(m.weight.shape)
                 m.weight.data /= torch.linalg.norm(m.weight, ord=2)
             else:
-                print("No initialization method specified")
+                # print("No initialization method specified")
+                pass
 
     if args.prune != 0.0:
         print(f"Original Sparsity: {cal_sparsity(model)}%")
@@ -328,7 +357,7 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
     scheduler = optim.lr_scheduler.MultiStepLR(
-        optimizer, milestones=[80, 120, 140], gamma=0.1
+        optimizer, milestones=[30, 60, 80], gamma=0.1
     )
 
     # Training loop
@@ -362,15 +391,15 @@ if __name__ == "__main__":
         total_test = 0
         model.eval()
         with torch.no_grad():
-            train_loss = 0.0
-            for data in trainloader:
-                images, labels = data
-                images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
-                _, predicted = torch.max(outputs.data, 1)
-                train_loss += criterion(outputs, labels).item()
-                total_train += labels.size(0)
-                correct_train += (predicted == labels).sum().item()
+            # train_loss = 0.0
+            # for data in trainloader:
+            #     images, labels = data
+            #     images, labels = images.to(device), labels.to(device)
+            #     outputs = model(images)
+            #     _, predicted = torch.max(outputs.data, 1)
+            #     train_loss += criterion(outputs, labels).item()
+            #     total_train += labels.size(0)
+            #     correct_train += (predicted == labels).sum().item()
 
             test_loss = 0.0
             for data in testloader:
@@ -382,17 +411,17 @@ if __name__ == "__main__":
                 total_test += labels.size(0)
                 correct_test += (predicted == labels).sum().item()
 
-        train_accuracy = 100 * correct_train / total_train
+        # train_accuracy = 100 * correct_train / total_train
         test_accuracy = 100 * correct_test / total_test
         if test_accuracy > best:
             best = test_accuracy
-            torch.save(model.state_dict(), save_path + "/best.pth")
+            # torch.save(model.state_dict(), save_path + "/best.pth")
 
-        generalization_gap = train_accuracy - test_accuracy
-        generalization_loss = train_loss - test_loss
-        writer.add_scalar("train accuracy", train_accuracy, epoch)
+        # generalization_gap = train_accuracy - test_accuracy
+        # generalization_loss = train_loss - test_loss
+        # writer.add_scalar("train accuracy", train_accuracy, epoch)
         writer.add_scalar("test accuracy", test_accuracy, epoch)
-        writer.add_scalar("train loss", train_loss / len(trainloader), epoch)
+        # writer.add_scalar("train loss", train_loss / len(trainloader), epoch)
         writer.add_scalar("test loss", test_loss / len(testloader), epoch)
         writer.add_scalar("generalization gap", generalization_gap, epoch)
         writer.add_scalar("generalization loss", generalization_loss, epoch)
