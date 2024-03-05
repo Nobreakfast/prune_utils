@@ -13,7 +13,7 @@ class DataLoaderX(DataLoader):
         return BackgroundGenerator(super().__iter__())
 
 
-def imagenet(batch_size, path, workers):
+def imagenet(path):
     transform_train = transforms.Compose(
         [
             transforms.Resize(256),
@@ -40,22 +40,23 @@ def imagenet(batch_size, path, workers):
     trainset = torchvision.datasets.ImageFolder(
         root=os.path.join(path, "train"), transform=transform_train
     )
-    trainloader = DataLoaderX(
-        trainset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=workers,
-        pin_memory=True,
-    )
+    # trainloader = DataLoaderX(
+    #     trainset,
+    #     batch_size=batch_size,
+    #     shuffle=True,
+    #     num_workers=workers,
+    #     pin_memory=True,
+    # )
     testset = torchvision.datasets.ImageFolder(
         root=os.path.join(path, "val"), transform=transform_test
     )
-    testloader = DataLoaderX(
-        testset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=workers,
-        pin_memory=True,
-    )
+    # testloader = DataLoaderX(
+    #     testset,
+    #     batch_size=batch_size,
+    #     shuffle=False,
+    #     num_workers=workers,
+    #     pin_memory=True,
+    # )
 
-    return [trainloader, testloader]
+    # return [trainloader, testloader]
+    return [trainset, testset]

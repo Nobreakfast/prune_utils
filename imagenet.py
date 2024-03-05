@@ -8,11 +8,19 @@ from torch.utils.tensorboard import SummaryWriter
 import argparse
 import tqdm
 from prune_utils.pai import *
-from data.imagenet import imagenet
+from data.imagenet import imagenet, DataLoaderX
 
 import os, random
 import torch.distributed as dist
 import torch.multiprocessing as mp
+from torch.nn.parallel.distributed import DistributedDataParallel as DDP
+
+use_ddp = "torch.nn.parallel.distributed"
+
+
+def print_rank_0(*args, **kwargs):
+    if dist.get_rank() == 0:
+        print(*args, **kwargs)
 
 
 def init_parallel(rank, world_size):
@@ -25,19 +33,10 @@ def init_parallel(rank, world_size):
     )
 
 
-def init_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-
-def parallel_main(rank, world_size):
-    init_seed(999)
-    init_parallel(rank, world_size)
-    print(f"process running, rank={rank}")
-
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+# def init_seed(seed):
+#     random.seed(seed)
+#     np.random.seed(seed)
+#     torch.manual_seed(seed)
 
 
 def __getattr(model, name):
@@ -51,45 +50,105 @@ def __getattr(model, name):
     return ret
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="PyTorch TinyImageNet Training")
-    parser.add_argument("-s", "--save", help="save path", default="0")
-    parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
-    parser.add_argument("-a", "--algorithm", help="prune algorithm", default="nonprune")
-    parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
-    parser.add_argument(
-        "-i",
-        "--im",
-        help="initialization method",
-        default=None,
+def train(
+    trainset,
+    testset,
+    model,
+    criterion,
+    optimizer,
+    scheduler,
+    save_path,
+    writer,
+):
+    rank = dist.get_rank()
+    device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+    model = DDP(model, device_ids=[rank])
+    datasampler = torch.utils.data.distributed.DistributedSampler(
+        trainset, shuffle=True
     )
-    parser.add_argument(
-        "-m",
-        "--model",
-        help="model",
-        default=None,
+    trainloader = DataLoaderX(
+        trainset,
+        batch_size=64,
+        num_workers=4,
+        pin_memory=True,
+        sampler=datasampler,
     )
-    # only works in resnet_res
-    parser.add_argument(
-        "--alpha",
-        help="alpha",
-        type=float,
-        default=1,
+    testloader = DataLoaderX(
+        testset,
+        batch_size=64 * 4,
+        num_workers=4,
+        pin_memory=True,
     )
-    # only works in resnet_res
-    parser.add_argument(
-        "--beta",
-        help="beta",
-        type=float,
-        default=1,
-    )
-    args = parser.parse_args()
+    # Training loop
+    best = 0
+    for epoch in tqdm.trange(100):
+        running_loss = 0.0
+        model.train()
+        # for i, data in enumerate(trainloader, 0):
+        for i, data in tqdm.tqdm(enumerate(trainloader, 0), total=len(trainloader)):
+            inputs, labels = data
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            optimizer.zero_grad()
+
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+
+            running_loss += loss.item()
+            if i % 200 == 199 and rank == 0:
+                writer.add_scalar(
+                    "training loss", running_loss / 200, epoch * len(trainloader) + i
+                )
+                running_loss = 0.0
+        scheduler.step()
+
+        # Calculate accuracy on train and test sets
+        if rank == 0:
+            correct_test = 0
+            total_test = 0
+            model.eval()
+            with torch.no_grad():
+                test_loss = 0.0
+                for data in testloader:
+                    images, labels = data
+                    images, labels = images.to(device), labels.to(device)
+                    outputs = model(images)
+                    _, predicted = torch.max(outputs.data, 1)
+                    test_loss += criterion(outputs, labels).item()
+                    total_test += labels.size(0)
+                    correct_test += (predicted == labels).sum().item()
+
+            # train_accuracy = 100 * correct_train / total_train
+            test_accuracy = 100 * correct_test / total_test
+            if test_accuracy > best:
+                best = test_accuracy
+                # torch.save(model.state_dict(), save_path + "/best.pth")
+
+            # generalization_gap = train_accuracy - test_accuracy
+            # generalization_loss = train_loss - test_loss
+            # writer.add_scalar("train accuracy", train_accuracy, epoch)
+            writer.add_scalar("test accuracy", test_accuracy, epoch)
+            # writer.add_scalar("train loss", train_loss / len(trainloader), epoch)
+            writer.add_scalar("test loss", test_loss / len(testloader), epoch)
+            # writer.add_scalar("generalization gap", generalization_gap, epoch)
+            # writer.add_scalar("generalization loss", generalization_loss, epoch)
+
+    # Close TensorBoard writer
+    writer.close()
+    print("Finished Training")
+    print("Best test accuracy: {:.2f}%".format(best))
+
+
+def parallel_main(rank, world_size, args):
+
+    init_parallel(rank, world_size)
 
     # Set up TensorBoard writer with log directory
     save_path = f"logs/tinyimagenet/{args.model}_{args.alpha}_{args.beta}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
     writer = SummaryWriter(log_dir=save_path)
-
-    [trainloader, testloader] = imagenet(64, "~/data3/imagenet", 4)
 
     if args.model == "resnet50":
         from models.resnet_ori import resnet50
@@ -353,80 +412,64 @@ if __name__ == "__main__":
                         m.weight_orig.data -= mean
                         m.weight_orig.data /= spec_norm
 
-    model.to(device)
+    # model.to(device)
+    [trainset, testset] = imagenet("~/data3/imagenet")
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[30, 60, 80], gamma=0.1
     )
+    train(
+        trainloader,
+        testloader,
+        model,
+        criterion,
+        optimizer,
+        scheduler,
+        save_path,
+        writer,
+    )
 
-    # Training loop
-    best = 0
-    for epoch in tqdm.trange(135):
-        running_loss = 0.0
-        model.train()
-        for i, data in enumerate(trainloader, 0):
-            inputs, labels = data
-            inputs, labels = inputs.to(device), labels.to(device)
 
-            optimizer.zero_grad()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="PyTorch TinyImageNet Training")
+    parser.add_argument("-s", "--save", help="save path", default="0")
+    parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
+    parser.add_argument("-a", "--algorithm", help="prune algorithm", default="nonprune")
+    parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
+    parser.add_argument("-w", "--world_size", help="world size", type=int, default=2)
+    parser.add_argument(
+        "-i",
+        "--im",
+        help="initialization method",
+        default=None,
+    )
+    parser.add_argument(
+        "-m",
+        "--model",
+        help="model",
+        default=None,
+    )
+    # only works in resnet_res
+    parser.add_argument(
+        "--alpha",
+        help="alpha",
+        type=float,
+        default=1,
+    )
+    # only works in resnet_res
+    parser.add_argument(
+        "--beta",
+        help="beta",
+        type=float,
+        default=1,
+    )
+    args = parser.parse_args()
 
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-
-            running_loss += loss.item()
-            if i % 200 == 199:
-                writer.add_scalar(
-                    "training loss", running_loss / 200, epoch * len(trainloader) + i
-                )
-                running_loss = 0.0
-        scheduler.step()
-
-        # Calculate accuracy on train and test sets
-        correct_train = 0
-        total_train = 0
-        correct_test = 0
-        total_test = 0
-        model.eval()
-        with torch.no_grad():
-            # train_loss = 0.0
-            # for data in trainloader:
-            #     images, labels = data
-            #     images, labels = images.to(device), labels.to(device)
-            #     outputs = model(images)
-            #     _, predicted = torch.max(outputs.data, 1)
-            #     train_loss += criterion(outputs, labels).item()
-            #     total_train += labels.size(0)
-            #     correct_train += (predicted == labels).sum().item()
-
-            test_loss = 0.0
-            for data in testloader:
-                images, labels = data
-                images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
-                _, predicted = torch.max(outputs.data, 1)
-                test_loss += criterion(outputs, labels).item()
-                total_test += labels.size(0)
-                correct_test += (predicted == labels).sum().item()
-
-        # train_accuracy = 100 * correct_train / total_train
-        test_accuracy = 100 * correct_test / total_test
-        if test_accuracy > best:
-            best = test_accuracy
-            # torch.save(model.state_dict(), save_path + "/best.pth")
-
-        # generalization_gap = train_accuracy - test_accuracy
-        # generalization_loss = train_loss - test_loss
-        # writer.add_scalar("train accuracy", train_accuracy, epoch)
-        writer.add_scalar("test accuracy", test_accuracy, epoch)
-        # writer.add_scalar("train loss", train_loss / len(trainloader), epoch)
-        writer.add_scalar("test loss", test_loss / len(testloader), epoch)
-        writer.add_scalar("generalization gap", generalization_gap, epoch)
-        writer.add_scalar("generalization loss", generalization_loss, epoch)
-
-    # Close TensorBoard writer
-    writer.close()
-    print("Finished Training")
-    print("Best test accuracy: {:.2f}%".format(best))
+    world_size = args.world_size
+    mp.spawn(
+        parallel_main,
+        args=(world_size, args),
+        nprocs=world_size,
+        join=True,
+    )
