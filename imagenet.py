@@ -149,7 +149,8 @@ def train(
     if writer is not None:
         writer.close()
     print("Finished Training")
-    print("Best test accuracy: {:.2f}%".format(best))
+    print(f"Best top-1 accuracy: {best_top1}%")
+    print(f"Best top-5 accuracy: {best_top5}%")
 
 
 def parallel_main(rank, world_size, args):
