@@ -15,7 +15,7 @@
 # python imagenet.py -m resnet18_res -i kaiming_in -r 3 --alpha 0.5 --beta 0.5 -s $1
 
 ## pruning
-for i in $(seq 0.80 0.05 0.98)
+for i in $(seq 0.85 0.10 0.98)
 do
     # python imagenet.py -m resnet18 -i xavier -r 0 -a uniform -p $i -s $1
     python imagenet.py -m resnet18 -i kaiming_in -r 0 -a uniform -p $i -s $1

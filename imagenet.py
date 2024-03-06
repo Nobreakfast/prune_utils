@@ -10,7 +10,7 @@ import tqdm
 from prune_utils.pai import *
 from data.imagenet import imagenet, DataLoaderX
 
-import os, random
+import os, random, time
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel.distributed import DistributedDataParallel as DDP
@@ -24,6 +24,8 @@ def print_rank_0(*args, **kwargs):
 
 
 def init_parallel(rank, world_size):
+    if rank != 0:
+        time.sleep(1)
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "12345"
     dist.init_process_group(
@@ -69,7 +71,7 @@ def train(
     )
     trainloader = DataLoaderX(
         trainset,
-        batch_size=64,
+        batch_size=60,
         num_workers=4,
         pin_memory=True,
         sampler=datasampler,
@@ -81,7 +83,8 @@ def train(
         pin_memory=True,
     )
     # Training loop
-    best = 0
+    best_top1 = 0
+    best_top5 = 0
     for epoch in tqdm.trange(100):
         running_loss = 0.0
         model.train()
@@ -107,8 +110,10 @@ def train(
 
         # Calculate accuracy on train and test sets
         if writer is not None:
-            correct_test = 0
-            total_test = 0
+            correct_top1 = 0
+            correct_top5 = 0
+            total_top1 = 0
+            total_top5 = 0
             model.eval()
             with torch.no_grad():
                 test_loss = 0.0
@@ -116,25 +121,29 @@ def train(
                     images, labels = data
                     images, labels = images.to(device), labels.to(device)
                     outputs = model(images)
+                    # top-1
                     _, predicted = torch.max(outputs.data, 1)
                     test_loss += criterion(outputs, labels).item()
-                    total_test += labels.size(0)
-                    correct_test += (predicted == labels).sum().item()
+                    total_top1 += labels.size(0)
+                    correct_top1 += (predicted == labels).sum().item()
 
-            # train_accuracy = 100 * correct_train / total_train
-            test_accuracy = 100 * correct_test / total_test
-            if test_accuracy > best:
-                best = test_accuracy
+                    # top-5
+                    _, predicted = torch.topk(outputs.data, 5, 1)
+                    total_top5 += labels.size(0)
+                    for i in range(5):
+                        correct_top5 += (predicted[:, i] == labels).sum().item()
+
+            top1_accuracy = 100 * correct_top1 / total_top1
+            top5_accuracy = 100 * correct_top5 / total_top5
+            if top1_accuracy > best_top1:
+                best_top1 = top1_accuracy
+            if top5_accuracy > best_top5:
+                best_top5 = top5_accuracy
                 # torch.save(model.state_dict(), save_path + "/best.pth")
 
-            # generalization_gap = train_accuracy - test_accuracy
-            # generalization_loss = train_loss - test_loss
-            # writer.add_scalar("train accuracy", train_accuracy, epoch)
-            writer.add_scalar("test accuracy", test_accuracy, epoch)
-            # writer.add_scalar("train loss", train_loss / len(trainloader), epoch)
+            writer.add_scalar("top-1", top1_accuracy, epoch)
+            writer.add_scalar("top-5", top5_accuracy, epoch)
             writer.add_scalar("test loss", test_loss / len(testloader), epoch)
-            # writer.add_scalar("generalization gap", generalization_gap, epoch)
-            # writer.add_scalar("generalization loss", generalization_loss, epoch)
 
     # Close TensorBoard writer
     if writer is not None:
@@ -155,11 +164,11 @@ def parallel_main(rank, world_size, args):
         writer = None
 
     if args.model == "resnet50":
-        from models.resnet_ori import resnet50
+        from models.resnet_imagenet import resnet50
 
         model = resnet50(num_classes=1000)
     elif args.model == "resnet50_res":
-        from models.resnet_ori_res import resnet50
+        from models.resnet_imagenet_res import resnet50
 
         model = resnet50(num_classes=1000, alpha=args.alpha, beta=args.beta)
     else:
@@ -213,7 +222,7 @@ def parallel_main(rank, world_size, args):
             # import time
             # t_start = time.time()
             # example_data, _ = next(iter(trainloader))
-            example_data = torch.randn(1, 3, 64, 64)
+            example_data = torch.randn(1, 3, 224, 224)
             sign_dict = linearize(model)
             iterations = 100
             # t_loop_start = time.time()
@@ -417,9 +426,9 @@ def parallel_main(rank, world_size, args):
                         m.weight_orig.data /= spec_norm
 
     # model.to(device)
-    [trainset, testset] = imagenet("~/data3/imagenet")
+    [trainset, testset] = imagenet("~/autodl-tmp/imagenet")
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(model.parameters(), lr=0.4, momentum=0.9, weight_decay=5e-4)
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[30, 60, 80], gamma=0.1
     )
