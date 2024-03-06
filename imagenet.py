@@ -98,7 +98,7 @@ def train(
             optimizer.step()
 
             running_loss += loss.item()
-            if i % 200 == 199 and rank == 0:
+            if i % 200 == 199 and writer is not None:
                 writer.add_scalar(
                     "training loss", running_loss / 200, epoch * len(trainloader) + i
                 )
@@ -106,7 +106,7 @@ def train(
         scheduler.step()
 
         # Calculate accuracy on train and test sets
-        if rank == 0:
+        if writer is not None:
             correct_test = 0
             total_test = 0
             model.eval()
@@ -137,7 +137,8 @@ def train(
             # writer.add_scalar("generalization loss", generalization_loss, epoch)
 
     # Close TensorBoard writer
-    writer.close()
+    if writer is not None:
+        writer.close()
     print("Finished Training")
     print("Best test accuracy: {:.2f}%".format(best))
 
@@ -148,7 +149,10 @@ def parallel_main(rank, world_size, args):
 
     # Set up TensorBoard writer with log directory
     save_path = f"logs/imagenet/{args.model}_{args.alpha}_{args.beta}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
-    writer = SummaryWriter(log_dir=save_path)
+    if rank == 0:
+        writer = SummaryWriter(log_dir=save_path)
+    else:
+        writer = None
 
     if args.model == "resnet50":
         from models.resnet_ori import resnet50
