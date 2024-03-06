@@ -71,17 +71,18 @@ def train(
     )
     trainloader = DataLoaderX(
         trainset,
-        batch_size=60,
-        num_workers=4,
+        batch_size=256,
+        num_workers=16,
         pin_memory=True,
         sampler=datasampler,
     )
-    testloader = DataLoaderX(
-        testset,
-        batch_size=64 * 4,
-        num_workers=4,
-        pin_memory=True,
-    )
+    if rank == 0:
+        testloader = DataLoaderX(
+            testset,
+            batch_size=128,
+            num_workers=16,
+            pin_memory=True,
+        )
     # Training loop
     best_top1 = 0
     best_top5 = 0
@@ -137,9 +138,9 @@ def train(
             top5_accuracy = 100 * correct_top5 / total_top5
             if top1_accuracy > best_top1:
                 best_top1 = top1_accuracy
+                torch.save(model.state_dict(), save_path + "/best.pth")
             if top5_accuracy > best_top5:
                 best_top5 = top5_accuracy
-                # torch.save(model.state_dict(), save_path + "/best.pth")
 
             writer.add_scalar("top-1", top1_accuracy, epoch)
             writer.add_scalar("top-5", top5_accuracy, epoch)
