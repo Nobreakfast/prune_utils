@@ -71,7 +71,7 @@ def train(
     )
     trainloader = DataLoaderX(
         trainset,
-        batch_size=256,
+        batch_size=128,
         num_workers=16,
         pin_memory=True,
         sampler=datasampler,
@@ -79,14 +79,14 @@ def train(
     if rank == 0:
         testloader = DataLoaderX(
             testset,
-            batch_size=128,
+            batch_size=128 * 4,
             num_workers=16,
             pin_memory=True,
         )
     # Training loop
     best_top1 = 0
     best_top5 = 0
-    for epoch in tqdm.trange(100):
+    for epoch in tqdm.trange(90):
         running_loss = 0.0
         model.train()
         for i, data in enumerate(trainloader, 0):
@@ -430,7 +430,7 @@ def parallel_main(rank, world_size, args):
     # model.to(device)
     [trainset, testset] = imagenet("~/autodl-tmp/imagenet")
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.4, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(model.parameters(), lr=0.4, momentum=0.9, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[30, 60, 80], gamma=0.1
     )
