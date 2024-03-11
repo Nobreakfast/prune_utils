@@ -86,9 +86,12 @@ def train(
     # Training loop
     best_top1 = 0
     best_top5 = 0
-    for epoch in tqdm.trange(90):
+    for epoch in tqdm.trange(91):
+        if epoch == 90:
+            break
         running_loss = 0.0
         model.train()
+        trainloader.sampler.set_epoch(i)
         for i, data in enumerate(trainloader, 0):
             # for i, data in tqdm.tqdm(enumerate(trainloader, 0), total=len(trainloader)):
             inputs, labels = data
@@ -176,6 +179,8 @@ def parallel_main(rank, world_size, args):
     else:
         raise ValueError("model not found")
 
+    [trainset, testset] = imagenet("~/autodl-tmp/imagenet")
+
     for m in model.modules():
         if isinstance(m, nn.Conv2d):
             if args.im == "xavier":
@@ -217,34 +222,40 @@ def parallel_main(rank, world_size, args):
             threshold = cal_threshold(score_dict, args.prune)
             apply_prune(model, score_dict, threshold)
         elif args.algorithm == "snip":
+            trainloader = DataLoaderX(
+                trainset,
+                batch_size=128,
+                num_workers=1,
+                pin_memory=False,
+                shuffle=True,
+            )
+            device = torch.device(
+                f"cuda:{rank}" if torch.cuda.is_available() else "cpu"
+            )
+            model = model.to(device)
             score_dict = snip(model, trainloader)
             threshold = cal_threshold(score_dict, args.prune)
             apply_prune(model, score_dict, threshold)
+            model = model.to(torch.device("cpu"))
         elif args.algorithm == "synflow":
-            # import time
-            # t_start = time.time()
-            # example_data, _ = next(iter(trainloader))
+            device = torch.device(
+                f"cuda:{rank}" if torch.cuda.is_available() else "cpu"
+            )
+            model = model.to(device)
             example_data = torch.randn(1, 3, 224, 224)
             sign_dict = linearize(model)
             iterations = 100
-            # t_loop_start = time.time()
-            # print("ready time: ", t_loop_start - t_start)
             for i in range(iterations):
-                # t_loop_start = time.time()
                 prune_ratio = args.prune / iterations * (i + 1)
                 score_dict = synflow(model, example_data)
-                # t_score = time.time()
                 threshold = cal_threshold(score_dict, prune_ratio)
-                # t_threshold = time.time()
-                apply_prune(model, score_dict, threshold)
-                # t_apply = time.time()
                 if i != iterations - 1:
+                    apply_prune(model, score_dict, threshold)
                     remove_mask(model)
-                # t_remove = time.time()
-                # print(
-                #     f"iter {i+1}/{iterations}, score: {t_score-t_loop_start:.2f}, threshold: {t_threshold-t_score:.2f}, apply: {t_apply-t_threshold:.2f}, remove: {t_remove-t_apply:.2f}"
-                # )
-            nonlinearize(model, sign_dict)
+                else:
+                    nonlinearize(model, sign_dict)
+                    apply_prune(model, score_dict, threshold)
+            model = model.to(torch.device("cpu"))
         else:
             for name, m in model.named_modules():
                 if isinstance(m, nn.Conv2d):
@@ -252,9 +263,9 @@ def parallel_main(rank, world_size, args):
                 elif isinstance(m, nn.Linear):
                     prune.random_unstructured(m, name="weight", amount=args.prune)
         print(f"Pruned Sparsity: {cal_sparsity(model)}")
-        for name, m in model.named_modules():
-            if isinstance(m, (nn.Conv2d, nn.Linear)):
-                print(f"{name} sparsity: {cal_sparsity(m)}")
+        # for name, m in model.named_modules():
+        #     if isinstance(m, (nn.Conv2d, nn.Linear)):
+        #         print(f"{name} sparsity: {cal_sparsity(m)}")
 
     if args.restore != 0:
         print("restoring !!!!")
@@ -286,13 +297,9 @@ def parallel_main(rank, world_size, args):
                     try:
                         bn = __getattr(model, bn_name)
                         if not isinstance(bn, nn.BatchNorm2d):
-                            print(f"{bn_name} not found")
                             continue
                         bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
                     except:
-                        print(f"{bn_name} not found")
                         pass
                 elif isinstance(m, nn.Linear):
                     spec_norm = torch.linalg.norm(m.weight, ord=2)
@@ -303,13 +310,9 @@ def parallel_main(rank, world_size, args):
                     try:
                         bn = __getattr(model, bn_name)
                         if not isinstance(bn, nn.BatchNorm1d):
-                            print(f"{bn_name} not found")
                             continue
                         bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
                     except:
-                        print(f"{bn_name} not found")
                         pass
         elif args.restore == 3:  # restore both
             print("restoring BN+weight")
@@ -327,13 +330,9 @@ def parallel_main(rank, world_size, args):
                     try:
                         bn = __getattr(model, bn_name)
                         if not isinstance(bn, nn.BatchNorm2d):
-                            print(f"{bn_name} not found")
                             continue
                         bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
                     except:
-                        print(f"{bn_name} not found")
                         pass
                 elif isinstance(m, nn.Linear):
                     spec_norm = torch.linalg.norm(m.weight, ord=2)
@@ -347,13 +346,9 @@ def parallel_main(rank, world_size, args):
                     try:
                         bn = __getattr(model, bn_name)
                         if not isinstance(bn, nn.BatchNorm1d):
-                            print(f"{bn_name} not found")
                             continue
                         bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
                     except:
-                        print(f"{bn_name} not found")
                         pass
         elif args.restore == 4:  # restore both and move mean
             print("restoring BN+weight+mean")
@@ -374,13 +369,9 @@ def parallel_main(rank, world_size, args):
                     try:
                         bn = __getattr(model, bn_name)
                         if not isinstance(bn, nn.BatchNorm2d):
-                            print(f"{bn_name} not found")
                             continue
                         bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
                     except:
-                        print(f"{bn_name} not found")
                         pass
                 elif isinstance(m, nn.Linear):
                     mean = m.weight.data.mean()
@@ -397,13 +388,9 @@ def parallel_main(rank, world_size, args):
                     try:
                         bn = __getattr(model, bn_name)
                         if not isinstance(bn, nn.BatchNorm1d):
-                            print(f"{bn_name} not found")
                             continue
                         bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
                     except:
-                        print(f"{bn_name} not found")
                         pass
         elif args.restore == 5:  # restore weight and mean
             print("restore weight")
@@ -428,7 +415,6 @@ def parallel_main(rank, world_size, args):
                         m.weight_orig.data /= spec_norm
 
     # model.to(device)
-    [trainset, testset] = imagenet("~/autodl-tmp/imagenet")
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.4, momentum=0.9, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.MultiStepLR(

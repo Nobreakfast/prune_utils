@@ -136,12 +136,16 @@ class Bottleneck(nn.Module):
         self.stride = stride
 
         if alpha is not None and alpha != 1.0:
-            self.alpha = nn.Parameter(torch.ones(1, planes, 1, 1, requires_grad=True))
+            self.alpha = nn.Parameter(
+                torch.ones(1, planes * self.expansion, 1, 1, requires_grad=True)
+            )
             self.alpha.data.fill_(alpha)
         else:
             self.alpha = 1.0
         if beta is not None and beta != 1.0:
-            self.beta = nn.Parameter(torch.ones(1, planes, 1, 1, requires_grad=True))
+            self.beta = nn.Parameter(
+                torch.ones(1, planes * self.expansion, 1, 1, requires_grad=True)
+            )
             self.beta.data.fill_(beta)
         else:
             self.beta = 1.0

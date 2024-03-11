@@ -114,34 +114,33 @@ if __name__ == "__main__":
             threshold = cal_threshold(score_dict, args.prune)
             apply_prune(model, score_dict, threshold)
         elif args.algorithm == "snip":
+            device = torch.device(
+                f"cuda:{rank}" if torch.cuda.is_available() else "cpu"
+            )
+            model = model.to(device)
             score_dict = snip(model, trainloader)
             threshold = cal_threshold(score_dict, args.prune)
             apply_prune(model, score_dict, threshold)
+            model = model.to(torch.device("cpu"))
         elif args.algorithm == "synflow":
-            # import time
-            # t_start = time.time()
-            # example_data, _ = next(iter(trainloader))
+            device = torch.device(
+                f"cuda:{rank}" if torch.cuda.is_available() else "cpu"
+            )
+            model = model.to(device)
             example_data = torch.randn(1, 3, 64, 64)
             sign_dict = linearize(model)
             iterations = 100
-            # t_loop_start = time.time()
-            # print("ready time: ", t_loop_start - t_start)
             for i in range(iterations):
-                # t_loop_start = time.time()
                 prune_ratio = args.prune / iterations * (i + 1)
                 score_dict = synflow(model, example_data)
-                # t_score = time.time()
                 threshold = cal_threshold(score_dict, prune_ratio)
-                # t_threshold = time.time()
-                apply_prune(model, score_dict, threshold)
-                # t_apply = time.time()
                 if i != iterations - 1:
+                    apply_prune(model, score_dict, threshold)
                     remove_mask(model)
-                # t_remove = time.time()
-                # print(
-                #     f"iter {i+1}/{iterations}, score: {t_score-t_loop_start:.2f}, threshold: {t_threshold-t_score:.2f}, apply: {t_apply-t_threshold:.2f}, remove: {t_remove-t_apply:.2f}"
-                # )
-            nonlinearize(model, sign_dict)
+                else:
+                    nonlinearize(model, sign_dict)
+                    apply_prune(model, score_dict, threshold)
+            model = model.to(torch.device("cpu"))
         else:
             for name, m in model.named_modules():
                 if isinstance(m, nn.Conv2d):
@@ -333,7 +332,7 @@ if __name__ == "__main__":
 
     # Training loop
     best = 0
-    for epoch in tqdm.trange(160):
+    for epoch in tqdm.trange(135):
         running_loss = 0.0
         model.train()
         for i, data in enumerate(trainloader, 0):

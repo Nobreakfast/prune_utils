@@ -106,13 +106,13 @@ if __name__ == "__main__":
 
         model = resnet20(args.alpha, args.beta)
     elif args.model == "vgg16":
-        from models.vgg16 import VGG16
+        from models.vgg import vgg16
 
-        model = VGG16()
+        model = vgg16()
     elif args.model == "vgg16_bn":
-        from models.vgg16 import VGG16_BN
+        from models.vgg import vgg16_bn
 
-        model = VGG16_BN()
+        model = vgg16_bn()
 
     elif args.model[:2] == "fc":
         import models.fc as fc
@@ -180,19 +180,29 @@ if __name__ == "__main__":
             threshold = cal_threshold(score_dict, args.prune)
             apply_prune(model, score_dict, threshold)
         elif args.algorithm == "snip":
+            device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
+            model = model.to(device)
             score_dict = snip(model, trainloader)
             threshold = cal_threshold(score_dict, args.prune)
             apply_prune(model, score_dict, threshold)
+            model = model.to(torch.device("cpu"))
         elif args.algorithm == "synflow":
-            example_data, _ = next(iter(trainloader))
+            device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
+            model = model.to(device)
+            example_data = torch.randn(1, 3, 64, 64)
+            sign_dict = linearize(model)
             iterations = 100
             for i in range(iterations):
                 prune_ratio = args.prune / iterations * (i + 1)
                 score_dict = synflow(model, example_data)
                 threshold = cal_threshold(score_dict, prune_ratio)
-                apply_prune(model, score_dict, threshold)
                 if i != iterations - 1:
+                    apply_prune(model, score_dict, threshold)
                     remove_mask(model)
+                else:
+                    nonlinearize(model, sign_dict)
+                    apply_prune(model, score_dict, threshold)
+            model = model.to(torch.device("cpu"))
         else:
             for name, m in model.named_modules():
                 if isinstance(m, nn.Conv2d):
@@ -200,6 +210,9 @@ if __name__ == "__main__":
                 elif isinstance(m, nn.Linear):
                     prune.random_unstructured(m, name="weight", amount=args.prune)
         print(f"Pruned Sparsity: {cal_sparsity(model)}%")
+        for name, m in model.named_modules():
+            if isinstance(m, (nn.Conv2d, nn.Linear)):
+                print(f"{name} sparsity: {cal_sparsity(m)}")
 
     if args.restore != 0:
         print("restoring !!!!")
