@@ -32,6 +32,7 @@ def init_parallel(rank, world_size):
         "nccl" if torch.cuda.is_available() else "gloo",
         rank=rank,
         world_size=world_size,
+        timeout=datetime.timedelta(seconds=100),
     )
 
 
