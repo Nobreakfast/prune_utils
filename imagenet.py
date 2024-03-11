@@ -10,7 +10,7 @@ import tqdm
 from prune_utils.pai import *
 from data.imagenet import imagenet, DataLoaderX
 
-import os, random, time
+import os, random, time, datetime
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel.distributed import DistributedDataParallel as DDP
@@ -92,7 +92,7 @@ def train(
             break
         running_loss = 0.0
         model.train()
-        trainloader.sampler.set_epoch(i)
+        trainloader.sampler.set_epoch(epoch)
         for i, data in enumerate(trainloader, 0):
             # for i, data in tqdm.tqdm(enumerate(trainloader, 0), total=len(trainloader)):
             inputs, labels = data

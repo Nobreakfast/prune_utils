@@ -87,9 +87,10 @@ def nonlinearize(model, signs_dict):
 
 def synflow(model, example_data):
     device = next(model.parameters()).device
-    input_dim = list(example_data[0, :].shape)
-    inputs = torch.ones([1] + input_dim).to(device)
+    # input_dim = list(example_data[0, :].shape)
+    # inputs = torch.ones([1] + input_dim).to(device)
     model.eval()
+    inputs = torch.ones_like(example_data).to(device)
     output = model(inputs)
     torch.sum(output).backward()
     score_dict = {}

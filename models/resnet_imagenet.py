@@ -43,8 +43,6 @@ class BasicBlock(nn.Module):
         base_width: int = 64,
         dilation: int = 1,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        alpha: float = 1,
-        beta: float = 1,
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -61,17 +59,6 @@ class BasicBlock(nn.Module):
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
         self.stride = stride
-
-        if alpha is not None and alpha != 1.0:
-            self.alpha = nn.Parameter(torch.ones(1, planes, 1, 1, requires_grad=True))
-            self.alpha.data.fill_(alpha)
-        else:
-            self.alpha = 1.0
-        if beta is not None and beta != 1.0:
-            self.beta = nn.Parameter(torch.ones(1, planes, 1, 1, requires_grad=True))
-            self.beta.data.fill_(beta)
-        else:
-            self.beta = 1.0
 
         init.kaiming_normal_(self.conv1.weight, mode="fan_out", nonlinearity="relu")
         self.conv1.weight.data.mul_(0.5**0.5)
@@ -91,8 +78,7 @@ class BasicBlock(nn.Module):
         if self.downsample is not None:
             identity = self.downsample(x)
 
-        # out += identity
-        out = self.beta * out + self.alpha * identity
+        out += identity
         out = self.relu(out)
 
         return out
@@ -117,8 +103,6 @@ class Bottleneck(nn.Module):
         base_width: int = 64,
         dilation: int = 1,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        alpha: float = 1,
-        beta: float = 1,
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -134,17 +118,6 @@ class Bottleneck(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
-
-        if alpha is not None and alpha != 1.0:
-            self.alpha = nn.Parameter(torch.ones(1, planes, 1, 1, requires_grad=True))
-            self.alpha.data.fill_(alpha)
-        else:
-            self.alpha = 1.0
-        if beta is not None and beta != 1.0:
-            self.beta = nn.Parameter(torch.ones(1, planes, 1, 1, requires_grad=True))
-            self.beta.data.fill_(beta)
-        else:
-            self.beta = 1.0
 
     def forward(self, x: Tensor) -> Tensor:
         identity = x
@@ -163,8 +136,7 @@ class Bottleneck(nn.Module):
         if self.downsample is not None:
             identity = self.downsample(x)
 
-        # out += identity
-        out = self.beta * out + self.alpha * identity
+        out += identity
         out = self.relu(out)
 
         return out
@@ -181,12 +153,8 @@ class ResNet(nn.Module):
         width_per_group: int = 64,
         replace_stride_with_dilation: Optional[List[bool]] = None,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        alpha: float = 1,
-        beta: float = 1,
     ) -> None:
         super().__init__()
-        self.alpha = alpha
-        self.beta = beta
         # _log_api_usage_once(self)
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
@@ -296,8 +264,6 @@ class ResNet(nn.Module):
                 self.base_width,
                 previous_dilation,
                 norm_layer,
-                alpha=self.alpha,
-                beta=self.beta,
             )
         )
 
@@ -311,8 +277,6 @@ class ResNet(nn.Module):
                     base_width=self.base_width,
                     dilation=self.dilation,
                     norm_layer=norm_layer,
-                    alpha=self.alpha,
-                    beta=self.beta,
                 )
             )
 

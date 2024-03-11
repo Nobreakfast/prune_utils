@@ -155,7 +155,7 @@ if __name__ == "__main__":
                     m.weight.view(m.weight.shape[0], -1), ord=2
                 )
             else:
-                print("No initialization method specified")
+                pass
         elif isinstance(m, nn.Linear):
             if args.im == "xavier":
                 nn.init.xavier_normal_(m.weight, gain=nn.init.calculate_gain("relu"))
@@ -167,7 +167,7 @@ if __name__ == "__main__":
                 m.weight.data = torch.randn(m.weight.shape)
                 m.weight.data /= torch.linalg.norm(m.weight, ord=2)
             else:
-                print("No initialization method specified")
+                pass
 
     if args.prune != 0.0:
         print(f"Original Sparsity: {cal_sparsity(model)}%")
@@ -189,7 +189,7 @@ if __name__ == "__main__":
         elif args.algorithm == "synflow":
             device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
             model = model.to(device)
-            example_data = torch.randn(1, 3, 64, 64)
+            example_data = torch.randn(1, 3, 32, 32)
             sign_dict = linearize(model)
             iterations = 100
             for i in range(iterations):
