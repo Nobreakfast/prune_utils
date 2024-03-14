@@ -4,6 +4,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 from .core import custom_datasets
+from .core.dataloader import DataLoaderX
 
 
 def tinyimagenet(batch_size, path, workers):
@@ -24,17 +25,28 @@ def tinyimagenet(batch_size, path, workers):
     )
 
     trainset = custom_datasets.TINYIMAGENET(
-        root=path, train=True, download=True, transform=transform_train,
+        root=path,
+        train=True,
+        download=True,
+        transform=transform_train,
     )
 
-    trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=batch_size, shuffle=True, num_workers=workers, pin_memory=True
+    trainloader = DataLoaderX(
+        trainset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=workers,
+        pin_memory=True,
     )
 
     testset = custom_datasets.TINYIMAGENET(
         root=path, train=False, download=True, transform=transform_test
     )
-    testloader = torch.utils.data.DataLoader(
-        testset, batch_size=batch_size * 8, shuffle=False, num_workers=workers, pin_memory=True
+    testloader = DataLoaderX(
+        testset,
+        batch_size=batch_size * 8,
+        shuffle=False,
+        num_workers=workers,
+        pin_memory=True,
     )
     return [trainloader, testloader]

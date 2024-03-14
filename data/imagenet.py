@@ -4,14 +4,6 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 
-from torch.utils.data import DataLoader
-from prefetch_generator import BackgroundGenerator
-
-
-class DataLoaderX(DataLoader):
-    def __iter__(self):
-        return BackgroundGenerator(super().__iter__())
-
 
 def imagenet(path):
     transform_train = transforms.Compose(

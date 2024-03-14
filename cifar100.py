@@ -8,6 +8,9 @@ from torch.utils.tensorboard import SummaryWriter
 import argparse
 import tqdm
 from prune_utils.pai import *
+from prune_utils.repair import repair_model_vgg
+from prune_utils.initial import initialization
+from data.core.dataloader import DataLoaderX
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -66,16 +69,12 @@ if __name__ == "__main__":
     trainset = torchvision.datasets.CIFAR100(
         root="~/Data/cifar100", train=True, download=True, transform=transform_train
     )
-    trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=256, shuffle=True, num_workers=4
-    )
+    trainloader = DataLoaderX(trainset, batch_size=256, shuffle=True, num_workers=4)
 
     testset = torchvision.datasets.CIFAR100(
         root="~/Data/cifar100", train=False, download=True, transform=transform_test
     )
-    testloader = torch.utils.data.DataLoader(
-        testset, batch_size=256, shuffle=False, num_workers=4
-    )
+    testloader = DataLoaderX(testset, batch_size=256, shuffle=False, num_workers=4)
 
     if args.model == "vgg16":
         from models.vgg import vgg16
@@ -88,33 +87,7 @@ if __name__ == "__main__":
     else:
         raise ValueError("model not found")
 
-    for m in model.modules():
-        if isinstance(m, nn.Conv2d):
-            if args.im == "xavier":
-                nn.init.xavier_normal_(m.weight, gain=nn.init.calculate_gain("relu"))
-            elif args.im == "kaiming_out":
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif args.im == "kaiming_in":
-                nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
-            elif args.im == "haocheng":
-                m.weight.data = torch.randn(m.weight.shape)
-                m.weight.data /= torch.linalg.norm(
-                    m.weight.view(m.weight.shape[0], -1), ord=2
-                )
-            else:
-                print("No initialization method specified")
-        elif isinstance(m, nn.Linear):
-            if args.im == "xavier":
-                nn.init.xavier_normal_(m.weight, gain=nn.init.calculate_gain("relu"))
-            elif args.im == "kaiming_out":
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif args.im == "kaiming_in":
-                nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
-            elif args.im == "haocheng":
-                m.weight.data = torch.randn(m.weight.shape)
-                m.weight.data /= torch.linalg.norm(m.weight, ord=2)
-            else:
-                print("No initialization method specified")
+    initialization(model, args.im)
 
     if args.prune != 0.0:
         print(f"Original Sparsity: {cal_sparsity(model)}%")
@@ -163,192 +136,7 @@ if __name__ == "__main__":
 
     if args.restore != 0:
         print("restoring !!!!")
-        if args.restore == 1:  # restore weight
-            print("restore weight")
-            for m in model.modules():
-                if isinstance(m, nn.Conv2d):
-                    spec_norm = torch.linalg.norm(
-                        m.weight.view(m.weight.shape[0], -1), ord=2
-                    )
-                    m.weight.data /= spec_norm
-                    if args.prune != 0.0:
-                        m.weight_orig.data /= spec_norm
-                elif isinstance(m, nn.Linear):
-                    spec_norm = torch.linalg.norm(m.weight, ord=2)
-                    m.weight.data /= spec_norm
-                    if args.prune != 0.0:
-                        m.weight_orig.data /= spec_norm
-        elif args.restore == 2:  # restore bn
-            print("restore BN")
-            for n, m in model.named_modules():
-                if isinstance(m, nn.Conv2d):
-                    spec_norm = torch.linalg.norm(
-                        m.weight.view(m.weight.shape[0], -1), ord=2
-                    )
-                    shape = m.weight.shape[1] * m.weight.shape[2] * m.weight.shape[3]
-                    lv = spec_norm / torch.sqrt(0.5 * shape * m.weight.var())
-                    name_split = n.split(".")
-                    bn_name = (
-                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
-                    )
-                    try:
-                        bn = __getattr(model, bn_name)
-                        if not isinstance(bn, nn.BatchNorm2d):
-                            print(f"{bn_name} not found")
-                            continue
-                        bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
-                    except:
-                        print(f"{bn_name} not found")
-                        pass
-                elif isinstance(m, nn.Linear):
-                    spec_norm = torch.linalg.norm(m.weight, ord=2)
-                    lv = spec_norm / torch.sqrt(
-                        0.5 * m.weight.shape[1] * m.weight.var()
-                    )
-                    name_split = n.split(".")
-                    bn_name = (
-                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
-                    )
-                    try:
-                        bn = __getattr(model, bn_name)
-                        if not isinstance(bn, nn.BatchNorm1d):
-                            print(f"{bn_name} not found")
-                            continue
-                        bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
-                    except:
-                        print(f"{bn_name} not found")
-                        pass
-        elif args.restore == 3:  # restore both
-            print("restoring BN+weight")
-            for n, m in model.named_modules():
-                if isinstance(m, nn.Conv2d):
-                    spec_norm = torch.linalg.norm(
-                        m.weight.view(m.weight.shape[0], -1), ord=2
-                    )
-                    shape = m.weight.shape[1] * m.weight.shape[2] * m.weight.shape[3]
-                    lv = spec_norm / torch.sqrt(0.5 * shape * m.weight.var())
-                    m.weight.data /= spec_norm
-                    if args.prune != 0.0:
-                        m.weight_orig.data /= spec_norm
-                    name_split = n.split(".")
-                    bn_name = (
-                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
-                    )
-                    try:
-                        bn = __getattr(model, bn_name)
-                        if not isinstance(bn, nn.BatchNorm2d):
-                            print(f"{bn_name} not found")
-                            continue
-                        bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
-                    except:
-                        print(f"{bn_name} not found")
-                        pass
-                elif isinstance(m, nn.Linear):
-                    spec_norm = torch.linalg.norm(m.weight, ord=2)
-                    lv = spec_norm / torch.sqrt(
-                        0.5 * m.weight.shape[1] * m.weight.var()
-                    )
-                    m.weight.data /= spec_norm
-                    if args.prune != 0.0:
-                        m.weight_orig.data /= spec_norm
-                    name_split = n.split(".")
-                    bn_name = (
-                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
-                    )
-                    try:
-                        bn = __getattr(model, bn_name)
-                        if not isinstance(bn, nn.BatchNorm1d):
-                            print(f"{bn_name} not found")
-                            continue
-                        bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
-                    except:
-                        print(f"{bn_name} not found")
-                        pass
-        elif args.restore == 4:  # restore both and move mean
-            print("restoring BN+weight+mean")
-            for n, m in model.named_modules():
-                if isinstance(m, nn.Conv2d):
-                    mean = m.weight.data.mean()
-                    m.weight.data -= mean
-                    spec_norm = torch.linalg.norm(
-                        m.weight.view(m.weight.shape[0], -1), ord=2
-                    )
-                    shape = m.weight.shape[1] * m.weight.shape[2] * m.weight.shape[3]
-                    lv = spec_norm / torch.sqrt(0.5 * shape * m.weight.var())
-                    m.weight.data /= spec_norm
-                    if args.prune != 0.0:
-                        m.weight_orig.data -= mean
-                        m.weight_orig.data /= spec_norm
-                    name_split = n.split(".")
-                    bn_name = (
-                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
-                    )
-                    try:
-                        bn = __getattr(model, bn_name)
-                        if not isinstance(bn, nn.BatchNorm2d):
-                            print(f"{bn_name} not found")
-                            continue
-                        bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
-                    except:
-                        print(f"{bn_name} not found")
-                        pass
-                elif isinstance(m, nn.Linear):
-                    mean = m.weight.data.mean()
-                    m.weight.data -= mean
-                    spec_norm = torch.linalg.norm(m.weight, ord=2)
-                    lv = spec_norm / torch.sqrt(
-                        0.5 * m.weight.shape[1] * m.weight.var()
-                    )
-                    m.weight.data /= spec_norm
-                    if args.prune != 0.0:
-                        m.weight_orig.data -= mean
-                        m.weight_orig.data /= spec_norm
-                    name_split = n.split(".")
-                    bn_name = (
-                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
-                    )
-                    try:
-                        bn = __getattr(model, bn_name)
-                        if not isinstance(bn, nn.BatchNorm1d):
-                            print(f"{bn_name} not found")
-                            continue
-                        bn.weight.data /= lv
-                        print(f"{bn_name} founded")
-                        print(bn)
-                    except:
-                        print(f"{bn_name} not found")
-                        pass
-        elif args.restore == 5:  # restore weight and mean
-            print("restore weight")
-            for m in model.modules():
-                if isinstance(m, nn.Conv2d):
-                    mean = m.weight.data.mean()
-                    m.weight.data -= mean
-                    spec_norm = torch.linalg.norm(
-                        m.weight.view(m.weight.shape[0], -1), ord=2
-                    )
-                    m.weight.data /= spec_norm
-                    if args.prune != 0.0:
-                        m.weight_orig.data -= mean
-                        m.weight_orig.data /= spec_norm
-                elif isinstance(m, nn.Linear):
-                    mean = m.weight.data.mean()
-                    m.weight.data -= mean
-                    spec_norm = torch.linalg.norm(m.weight, ord=2)
-                    m.weight.data /= spec_norm
-                    if args.prune != 0.0:
-                        m.weight_orig.data -= mean
-                        m.weight_orig.data /= spec_norm
+        repair_model_vgg(model, args.restore)
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()
@@ -412,7 +200,7 @@ if __name__ == "__main__":
         test_accuracy = 100 * correct_test / total_test
         if test_accuracy > best:
             best = test_accuracy
-            torch.save(model.state_dict(), save_path + "/best.pth")
+            # torch.save(model.state_dict(), save_path + "/best.pth")
 
         generalization_gap = train_accuracy - test_accuracy
         generalization_loss = train_loss - test_loss
