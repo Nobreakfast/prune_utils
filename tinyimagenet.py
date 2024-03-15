@@ -67,7 +67,6 @@ def train(
         writer = None
 
     model = torch.load(save_path + "/init.pt")
-    os.system(f"rm {save_path}/init.pt")
     device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     model = DDP(model, device_ids=[rank])
@@ -83,7 +82,7 @@ def train(
     trainloader = DataLoaderX(
         trainset,
         batch_size=256,
-        num_workers=16,
+        num_workers=4,
         pin_memory=True,
         sampler=train_sampler,
     )
@@ -92,16 +91,15 @@ def train(
     )
     testloader = DataLoaderX(
         testset,
-        batch_size=256 * 4,
-        num_workers=16,
+        batch_size=256 * 8,
+        num_workers=4,
         pin_memory=True,
         sampler=test_sampler,
     )
 
     # Training loop
     best = 0
-    # for epoch in tqdm.trange(135):
-    for epoch in tqdm.trange(1):
+    for epoch in tqdm.trange(135, leave=False):
         running_loss = 0.0
         model.train()
         trainloader.sampler.set_epoch(epoch)
@@ -142,7 +140,7 @@ def train(
         test_accuracy = 100 * correct_test / total_test
         if test_accuracy > best:
             best = test_accuracy
-            # torch.save(model.state_dict(), save_path + "/best.pth")
+            torch.save(model.state_dict(), save_path + "/best.pth")
 
         if rank == 0:
             writer.add_scalar("test accuracy", test_accuracy, epoch)
@@ -170,7 +168,6 @@ def train(
                 total_test += labels.size(0)
                 correct_test += (predicted == labels).sum().item()
 
-        train_accuracy = 100 * correct_train / total_train
         test_accuracy = 100 * correct_test / total_test
         print("Overall test accuracy: {:.2f}%".format(test_accuracy, rank))
 
@@ -294,10 +291,10 @@ if __name__ == "__main__":
             world_size,
             trainset,
             testset,
-            model,
             save_path,
         ),
         nprocs=world_size,
         join=True,
     )
     dist.destroy_process_group()
+    os.system(f"rm {save_path}/init.pt")
