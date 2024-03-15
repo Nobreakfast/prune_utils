@@ -26,11 +26,11 @@ def print_rank_0(*args, **kwargs):
         print(*args, **kwargs)
 
 
-def init_parallel(rank, world_size):
+def init_parallel(rank, world_size, port):
     if rank != 0:
         time.sleep(1)
     os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "12345"
+    os.environ["MASTER_PORT"] = port
     dist.init_process_group(
         "nccl" if torch.cuda.is_available() else "gloo",
         rank=rank,
@@ -42,11 +42,12 @@ def init_parallel(rank, world_size):
 def parallel_main(
     rank,
     world_size,
+    port,
     trainset,
     testset,
     save_path,
 ):
-    init_parallel(rank, world_size)
+    init_parallel(rank, world_size, port)
 
     train(
         trainset,
@@ -179,6 +180,7 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--algorithm", help="prune algorithm", default="nonprune")
     parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
     parser.add_argument("-w", "--world_size", help="world size", type=int, default=2)
+    parser.add_argument("-t", "--port", help="port", default="12345")
     parser.add_argument(
         "-i",
         "--im",
@@ -289,6 +291,7 @@ if __name__ == "__main__":
         parallel_main,
         args=(
             world_size,
+            args.port,
             trainset,
             testset,
             save_path,
