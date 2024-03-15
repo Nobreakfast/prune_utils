@@ -73,7 +73,10 @@ def train(
     model = DDP(model, device_ids=[rank])
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.2, momentum=0.9, weight_decay=1e-4)
+    world_size = dist.get_world_size()
+    optimizer = optim.SGD(
+        model.parameters(), lr=0.2 * (world_size**0.5), momentum=0.9, weight_decay=1e-4
+    )
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[80, 120, 140], gamma=0.1
     )
@@ -116,7 +119,7 @@ def train(
             optimizer.step()
 
             running_loss += loss.item()
-            if i % 200 == 199 and writer is not None:
+            if i % 20 == 19 and writer is not None:
                 writer.add_scalar(
                     "training loss", running_loss / 200, epoch * len(trainloader) + i
                 )
@@ -276,9 +279,9 @@ if __name__ == "__main__":
                 elif isinstance(m, nn.Linear):
                     prune.random_unstructured(m, name="weight", amount=args.prune)
         print(f"Pruned Sparsity: {cal_sparsity(model)}")
-        for name, m in model.named_modules():
-            if isinstance(m, (nn.Conv2d, nn.Linear)):
-                print(f"{name} sparsity: {cal_sparsity(m)}")
+        # for name, m in model.named_modules():
+        #     if isinstance(m, (nn.Conv2d, nn.Linear)):
+        #         print(f"{name} sparsity: {cal_sparsity(m)}")
 
     if args.restore != 0:
         print("restoring !!!!")
@@ -289,15 +292,8 @@ if __name__ == "__main__":
     world_size = args.world_size
     mp.spawn(
         parallel_main,
-        args=(
-            world_size,
-            args.port,
-            trainset,
-            testset,
-            save_path,
-        ),
+        args=(world_size, args.port, trainset, testset, save_path),
         nprocs=world_size,
         join=True,
     )
-    dist.destroy_process_group()
     os.system(f"rm {save_path}/init.pt")
