@@ -78,7 +78,7 @@ def train(
         model.parameters(), lr=0.2 * (world_size**0.5), momentum=0.9, weight_decay=1e-4
     )
     scheduler = optim.lr_scheduler.MultiStepLR(
-        optimizer, milestones=[80, 120, 140], gamma=0.1
+        optimizer, milestones=[40, 60, 80], gamma=0.1
     )
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         trainset, shuffle=True
@@ -103,7 +103,7 @@ def train(
 
     # Training loop
     best = 0
-    for epoch in tqdm.trange(135, leave=False):
+    for epoch in tqdm.trange(90, leave=False):
         running_loss = 0.0
         model.train()
         trainloader.sampler.set_epoch(epoch)
