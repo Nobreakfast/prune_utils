@@ -301,9 +301,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     world_size = args.world_size
-    mp.spawn(
-        parallel_main,
-        args=(world_size, args),
-        nprocs=world_size,
-        join=True,
-    )
+    mp.spawn(parallel_main, args=(world_size, args), nprocs=world_size, join=True)

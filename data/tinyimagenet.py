@@ -7,7 +7,7 @@ from .core import custom_datasets
 from .core.dataloader import DataLoaderX
 
 
-def tinyimagenet(batch_size, path, workers):
+def tinyimagenet(batch_size, path):
     # os.system(f"mkdir -p {path}")
     transform_train = transforms.Compose(
         [
@@ -31,22 +31,23 @@ def tinyimagenet(batch_size, path, workers):
         transform=transform_train,
     )
 
-    trainloader = DataLoaderX(
-        trainset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=workers,
-        pin_memory=True,
-    )
+    # trainloader = DataLoaderX(
+    #     trainset,
+    #     batch_size=batch_size,
+    #     shuffle=True,
+    #     num_workers=workers,
+    #     pin_memory=True,
+    # )
 
     testset = custom_datasets.TINYIMAGENET(
         root=path, train=False, download=True, transform=transform_test
     )
-    testloader = DataLoaderX(
-        testset,
-        batch_size=batch_size * 8,
-        shuffle=False,
-        num_workers=workers,
-        pin_memory=True,
-    )
-    return [trainloader, testloader]
+    # testloader = DataLoaderX(
+    #     testset,
+    #     batch_size=batch_size * 8,
+    #     shuffle=False,
+    #     num_workers=workers,
+    #     pin_memory=True,
+    # )
+    # return [trainloader, testloader]
+    return [trainset, testset]

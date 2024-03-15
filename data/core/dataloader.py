@@ -1,4 +1,5 @@
 from prefetch_generator import BackgroundGenerator
+from torch.utils.data import DataLoader
 
 
 class DataLoaderX(DataLoader):

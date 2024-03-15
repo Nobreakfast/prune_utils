@@ -109,7 +109,7 @@ if __name__ == "__main__":
         elif args.algorithm == "synflow":
             device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
             model = model.to(device)
-            example_data = torch.randn(1, 3, 64, 64)
+            example_data = torch.randn(1, 3, 32, 32)
             sign_dict = linearize(model)
             iterations = 100
             for i in range(iterations):
@@ -140,14 +140,14 @@ if __name__ == "__main__":
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[80, 120, 140], gamma=0.1
     )
 
     # Training loop
     best = 0
-    for epoch in tqdm.trange(160):
+    for epoch in tqdm.trange(135):
         running_loss = 0.0
         model.train()
         for i, data in enumerate(trainloader, 0):
