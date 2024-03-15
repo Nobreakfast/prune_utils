@@ -150,10 +150,6 @@ def train(
             writer.add_scalar("test accuracy", test_accuracy, epoch)
             writer.add_scalar("test loss", test_loss / len(testloader), epoch)
 
-    # Close TensorBoard writer
-    if writer is not None:
-        writer.close()
-        print("Finished Training")
     print("Best test accuracy: {:.2f}% in [GPU {:d}]".format(best, rank))
 
     if rank == 0:
@@ -174,6 +170,12 @@ def train(
 
         test_accuracy = 100 * correct_test / total_test
         print("Overall test accuracy: {:.2f}%".format(test_accuracy, rank))
+        writer.add_scalar("Overall test accuracy", test_accuracy, 0)
+
+    # Close TensorBoard writer
+    if writer is not None:
+        writer.close()
+        print("Finished Training")
 
 
 if __name__ == "__main__":

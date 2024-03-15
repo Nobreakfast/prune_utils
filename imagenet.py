@@ -164,10 +164,6 @@ def train(
             writer.add_scalar("top-5", top5_accuracy, epoch)
             writer.add_scalar("test loss", test_loss / len(testloader), epoch)
 
-    # Close TensorBoard writer
-    if writer is not None:
-        writer.close()
-        print("Finished Training")
     print(
         "[GPU {:d}] Best top-1: {:.2f}% top-5: {:.2f}%".format(
             rank, best_top1, best_top5
@@ -203,6 +199,13 @@ def train(
         print(
             "Overall top-1: {:.2f}% top-5: {:.2f}%".format(top1_accuracy, top5_accuracy)
         )
+        writer.add_scalar("Overall top-1", top1_accuracy, 0)
+        writer.add_scalar("Overall top-5", top5_accuracy, 0)
+
+    # Close TensorBoard writer
+    if writer is not None:
+        writer.close()
+        print("Finished Training")
 
 
 if __name__ == "__main__":
