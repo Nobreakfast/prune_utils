@@ -44,19 +44,13 @@ def parallel_main(
     world_size,
     trainset,
     testset,
-    model,
-    criterion,
-    optimizer,
-    scheduler,
     save_path,
 ):
+    init_parallel(rank, world_size)
+
     train(
         trainset,
         testset,
-        model,
-        criterion,
-        optimizer,
-        scheduler,
         save_path,
     )
 
@@ -64,22 +58,26 @@ def parallel_main(
 def train(
     trainset,
     testset,
-    model,
-    criterion,
-    optimizer,
-    scheduler,
     save_path,
 ):
+    rank = dist.get_rank()
     if rank == 0:
         writer = SummaryWriter(log_dir=save_path)
     else:
         writer = None
 
-    rank = dist.get_rank()
+    model = torch.load(save_path + "/init.pt")
+    os.system(f"rm {save_path}/init.pt")
     device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     model = DDP(model, device_ids=[rank])
-    datasampler = torch.utils.data.distributed.DistributedSampler(
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(model.parameters(), lr=0.2, momentum=0.9, weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.MultiStepLR(
+        optimizer, milestones=[80, 120, 140], gamma=0.1
+    )
+    train_sampler = torch.utils.data.distributed.DistributedSampler(
         trainset, shuffle=True
     )
     trainloader = DataLoaderX(
@@ -87,21 +85,23 @@ def train(
         batch_size=256,
         num_workers=16,
         pin_memory=True,
-        sampler=datasampler,
+        sampler=train_sampler,
     )
-    if rank == 0:
-        testloader = DataLoaderX(
-            testset,
-            batch_size=256 * 4,
-            num_workers=16,
-            pin_memory=True,
-        )
+    test_sampler = torch.utils.data.distributed.DistributedSampler(
+        testset, shuffle=True
+    )
+    testloader = DataLoaderX(
+        testset,
+        batch_size=256 * 4,
+        num_workers=16,
+        pin_memory=True,
+        sampler=test_sampler,
+    )
 
     # Training loop
     best = 0
-    for epoch in tqdm.trange(136):
-        if epoch == 135:
-            break
+    # for epoch in tqdm.trange(135):
+    for epoch in tqdm.trange(1):
         running_loss = 0.0
         model.train()
         trainloader.sampler.set_epoch(epoch)
@@ -125,53 +125,54 @@ def train(
         scheduler.step()
 
         # Calculate accuracy on train and test sets
-        if writer is not None:
-            correct_train = 0
-            total_train = 0
-            correct_test = 0
-            total_test = 0
-            model.eval()
-            with torch.no_grad():
-                train_loss = 0.0
-                for data in trainloader:
-                    images, labels = data
-                    images, labels = images.to(device), labels.to(device)
-                    outputs = model(images)
-                    _, predicted = torch.max(outputs.data, 1)
-                    train_loss += criterion(outputs, labels).item()
-                    total_train += labels.size(0)
-                    correct_train += (predicted == labels).sum().item()
+        correct_test = 0
+        total_test = 0
+        model.eval()
+        with torch.no_grad():
+            test_loss = 0.0
+            for data in testloader:
+                images, labels = data
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                _, predicted = torch.max(outputs.data, 1)
+                test_loss += criterion(outputs, labels).item()
+                total_test += labels.size(0)
+                correct_test += (predicted == labels).sum().item()
 
-                test_loss = 0.0
-                for data in testloader:
-                    images, labels = data
-                    images, labels = images.to(device), labels.to(device)
-                    outputs = model(images)
-                    _, predicted = torch.max(outputs.data, 1)
-                    test_loss += criterion(outputs, labels).item()
-                    total_test += labels.size(0)
-                    correct_test += (predicted == labels).sum().item()
+        test_accuracy = 100 * correct_test / total_test
+        if test_accuracy > best:
+            best = test_accuracy
+            # torch.save(model.state_dict(), save_path + "/best.pth")
 
-            train_accuracy = 100 * correct_train / total_train
-            test_accuracy = 100 * correct_test / total_test
-            if test_accuracy > best:
-                best = test_accuracy
-                # torch.save(model.state_dict(), save_path + "/best.pth")
-
-            generalization_gap = train_accuracy - test_accuracy
-            generalization_loss = train_loss - test_loss
-            writer.add_scalar("train accuracy", train_accuracy, epoch)
+        if rank == 0:
             writer.add_scalar("test accuracy", test_accuracy, epoch)
-            writer.add_scalar("train loss", train_loss / len(trainloader), epoch)
             writer.add_scalar("test loss", test_loss / len(testloader), epoch)
-            writer.add_scalar("generalization gap", generalization_gap, epoch)
-            writer.add_scalar("generalization loss", generalization_loss, epoch)
 
     # Close TensorBoard writer
     if writer is not None:
         writer.close()
         print("Finished Training")
-        print("Best test accuracy: {:.2f}%".format(best))
+    print("Best test accuracy: {:.2f}% in [GPU {:d}]".format(best, rank))
+
+    if rank == 0:
+        model.load_state_dict(torch.load(save_path + "/best.pth"))
+        correct_test = 0
+        total_test = 0
+        model.eval()
+        with torch.no_grad():
+            test_loss = 0.0
+            for data in testloader:
+                images, labels = data
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                _, predicted = torch.max(outputs.data, 1)
+                test_loss += criterion(outputs, labels).item()
+                total_test += labels.size(0)
+                correct_test += (predicted == labels).sum().item()
+
+        train_accuracy = 100 * correct_train / total_train
+        test_accuracy = 100 * correct_test / total_test
+        print("Overall test accuracy: {:.2f}%".format(test_accuracy, rank))
 
 
 if __name__ == "__main__":
@@ -211,6 +212,7 @@ if __name__ == "__main__":
 
     # Set up TensorBoard writer with log directory
     save_path = f"logs/tinyimagenet/{args.model}_{args.alpha}_{args.beta}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
+    os.system(f"mkdir -p {save_path}")
 
     [trainset, testset] = tinyimagenet(256, "~/Data/tiny-imagenet-200")
 
@@ -245,18 +247,14 @@ if __name__ == "__main__":
                 pin_memory=False,
                 shuffle=True,
             )
-            device = torch.device(
-                f"cuda:{rank}" if torch.cuda.is_available() else "cpu"
-            )
+            device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
             model = model.to(device)
             score_dict = snip(model, trainloader)
             threshold = cal_threshold(score_dict, args.prune)
             apply_prune(model, score_dict, threshold)
             model = model.to(torch.device("cpu"))
         elif args.algorithm == "synflow":
-            device = torch.device(
-                f"cuda:{rank}" if torch.cuda.is_available() else "cpu"
-            )
+            device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
             model = model.to(device)
             example_data = torch.randn(1, 3, 64, 64)
             sign_dict = linearize(model)
@@ -287,11 +285,7 @@ if __name__ == "__main__":
         print("restoring !!!!")
         repair_model(model, args.restore)
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.2, momentum=0.9, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.MultiStepLR(
-        optimizer, milestones=[80, 120, 140], gamma=0.1
-    )
+    torch.save(model, save_path + "/init.pt")
 
     world_size = args.world_size
     mp.spawn(
@@ -301,11 +295,9 @@ if __name__ == "__main__":
             trainset,
             testset,
             model,
-            criterion,
-            optimizer,
-            scheduler,
             save_path,
         ),
         nprocs=world_size,
         join=True,
     )
+    dist.destroy_process_group()
