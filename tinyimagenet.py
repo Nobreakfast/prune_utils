@@ -156,6 +156,12 @@ def train(
         model.load_state_dict(torch.load(save_path + "/best.pth"))
         correct_test = 0
         total_test = 0
+        dataloader = DataLoaderX(
+            testset,
+            batch_size=256 * 8,
+            num_workers=16,
+            pin_memory=True,
+        )
         model.eval()
         with torch.no_grad():
             test_loss = 0.0

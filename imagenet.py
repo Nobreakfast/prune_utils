@@ -175,6 +175,13 @@ def train(
         correct_top5 = 0
         total_top1 = 0
         total_top5 = 0
+        dataloader = DataLoaderX(
+            testset,
+            batch_size=128 * 4,
+            num_workers=16,
+            pin_memory=True,
+            shuffle=False,
+        )
         model.eval()
         with torch.no_grad():
             test_loss = 0.0
