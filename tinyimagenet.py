@@ -179,7 +179,7 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
     parser.add_argument("-a", "--algorithm", help="prune algorithm", default="nonprune")
     parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
-    parser.add_argument("-w", "--world_size", help="world size", type=int, default=2)
+    parser.add_argument("-w", "--world_size", help="world size", type=int, default=3)
     parser.add_argument("-t", "--port", help="port", default="12345")
     parser.add_argument(
         "-i",
