@@ -114,7 +114,10 @@ def __repair_masked_conv(conv, action):
         conv.weight_orig.data /= sn
         conv.weight.data = conv.weight_orig * conv.weight_mask
     shape = conv.weight.shape[1] * conv.weight.shape[2] * conv.weight.shape[3]
-    lv = sn / sqrt(0.5 * shape * var)
+    tmp = sqrt(0.5 * shape * var)
+    if tmp == 0:
+        return 1
+    lv = sn / tmp
     return lv
 
 
@@ -127,7 +130,10 @@ def __repair_conv(conv, action):
     if action:
         conv.weight.data /= sn
     shape = conv.weight.shape[1] * conv.weight.shape[2] * conv.weight.shape[3]
-    lv = sn / sqrt(0.5 * shape * var)
+    tmp = sqrt(0.5 * shape * var)
+    if tmp == 0:
+        return 1
+    lv = sn / tmp
     return lv
 
 
@@ -148,7 +154,10 @@ def __repair_masked_fc(fc, action):
     if action:
         fc.weight_orig.data /= sn
         fc.weight.data = fc.weight_orig * fc.weight_mask
-    lv = sn / sqrt(0.5 * fc.weight.shape[1] * var)
+    tmp = sqrt(0.5 * fc.weight.shape[1] * var)
+    if tmp == 0:
+        return 1
+    lv = sn / tmp
     return lv
 
 
@@ -160,7 +169,10 @@ def __repair_fc(fc, action):
     sn = torch.linalg.norm(fc.weight, ord=2).item()
     if action:
         fc.weight.data /= sn
-    lv = sn / sqrt(0.5 * fc.weight.shape[1] * var)
+    tmp = sqrt(0.5 * fc.weight.shape[1] * var)
+    if tmp == 0:
+        return 1
+    lv = sn / tmp
     return lv
 
 
