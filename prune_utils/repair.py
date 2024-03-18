@@ -109,7 +109,10 @@ def __repair_masked_conv(conv, action):
     if action:
         conv.weight_orig.data -= mean
         conv.weight.data = conv.weight_orig * conv.weight_mask
-    sn = torch.linalg.norm(conv.weight.view(conv.weight.shape[0], -1), ord=2).item()
+    try:
+        sn = torch.linalg.norm(conv.weight.view(conv.weight.shape[0], -1), ord=2).item()
+    except:
+        sn = 1
     if action:
         conv.weight_orig.data /= sn
         conv.weight.data = conv.weight_orig * conv.weight_mask
@@ -122,11 +125,14 @@ def __repair_masked_conv(conv, action):
 
 
 def __repair_conv(conv, action):
-    mean = conv.weight[conv.weight != 0].mean().item()
+    mean = conv.weight.mean().item()
     var = conv.weight.var().item()
     if action:
         conv.weight.data -= mean
-    sn = torch.linalg.norm(conv.weight.view(conv.weight.shape[0], -1), ord=2).item()
+    try:
+        sn = torch.linalg.norm(conv.weight.view(conv.weight.shape[0], -1), ord=2).item()
+    except:
+        sn = 1
     if action:
         conv.weight.data /= sn
     shape = conv.weight.shape[1] * conv.weight.shape[2] * conv.weight.shape[3]
@@ -150,7 +156,10 @@ def __repair_masked_fc(fc, action):
     if action:
         fc.weight_orig.data -= mean
         fc.weight.data = fc.weight_orig * fc.weight_mask
-    sn = torch.linalg.norm(fc.weight, ord=2).item()
+    try:
+        sn = torch.linalg.norm(fc.weight, ord=2).item()
+    except:
+        sn = 1
     if action:
         fc.weight_orig.data /= sn
         fc.weight.data = fc.weight_orig * fc.weight_mask
@@ -162,11 +171,14 @@ def __repair_masked_fc(fc, action):
 
 
 def __repair_fc(fc, action):
-    mean = fc.weight[fc.weight != 0].mean().item()
+    mean = fc.weight.mean().item()
     var = fc.weight.var().item()
     if action:
         fc.weight.data -= mean
-    sn = torch.linalg.norm(fc.weight, ord=2).item()
+    try:
+        sn = torch.linalg.norm(fc.weight, ord=2).item()
+    except:
+        sn = 1
     if action:
         fc.weight.data /= sn
     tmp = sqrt(0.5 * fc.weight.shape[1] * var)
