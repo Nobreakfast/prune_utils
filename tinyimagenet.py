@@ -53,7 +53,7 @@ if __name__ == "__main__":
     os.system(f"mkdir -p {save_path}")
     writer = SummaryWriter(log_dir=save_path)
 
-    [trainset, testset] = tinyimagenet(256, "/root/tiny-imagenet-200")
+    [trainset, testset] = tinyimagenet(256, "/root/autodl-tmp/tiny-imagenet-200")
 
     if args.model == "resnet18":
         from models.resnet_ori import resnet18
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.2, momentum=0.9, weight_decay=1e-4)
+    optimizer = optim.SGD(model.parameters(), lr=0.2, momentum=0.9, weight_decay=5e-4)
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[40, 60, 80], gamma=0.1
     )
@@ -150,7 +150,6 @@ if __name__ == "__main__":
     for epoch in tqdm.trange(90, leave=False):
         running_loss = 0.0
         model.train()
-        trainloader.sampler.set_epoch(epoch)
         for i, data in enumerate(trainloader, 0):
             inputs, labels = data
             inputs, labels = inputs.to(device), labels.to(device)

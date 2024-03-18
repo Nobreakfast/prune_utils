@@ -140,7 +140,7 @@ if __name__ == "__main__":
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=1e-4)
+    optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[80, 120, 140], gamma=0.1
     )

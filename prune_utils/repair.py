@@ -73,12 +73,12 @@ def repair_model(model, restore):
                 try:
                     bn = __getattr(model, bn_name)
                     if not isinstance(bn, nn.BatchNorm2d):
-                        print(f"{bn_name} not correct")
+                        # print(f"{bn_name} not correct")
                         continue
                     repair_bn(bn, lv)
-                    print(f"{bn_name} founded")
+                    # print(f"{bn_name} founded")
                 except:
-                    print(f"{bn_name} not found")
+                    # print(f"{bn_name} not found")
                     pass
         elif isinstance(m, nn.Linear):
             lv = repair_fc(m, W)
@@ -87,12 +87,12 @@ def repair_model(model, restore):
                 try:
                     bn = __getattr(model, bn_name)
                     if not isinstance(bn, nn.BatchNorm1d):
-                        print(f"{bn_name} not correct")
+                        # print(f"{bn_name} not correct")
                         continue
                     repair_bn(bn, lv)
-                    print(f"{bn_name} founded")
+                    # print(f"{bn_name} founded")
                 except:
-                    print(f"{bn_name} not found")
+                    # print(f"{bn_name} not found")
                     pass
 
 
@@ -104,7 +104,7 @@ def repair_conv(conv, action=True):
 
 
 def __repair_masked_conv(conv, action):
-    mean = conv.weight.mean().item()
+    mean = conv.weight[conv.weight != 0].mean().item()
     var = conv.weight.var().item()
     if action:
         conv.weight_orig.data -= mean
@@ -122,7 +122,7 @@ def __repair_masked_conv(conv, action):
 
 
 def __repair_conv(conv, action):
-    mean = conv.weight.mean().item()
+    mean = conv.weight[conv.weight != 0].mean().item()
     var = conv.weight.var().item()
     if action:
         conv.weight.data -= mean
@@ -145,7 +145,7 @@ def repair_fc(fc, action=True):
 
 
 def __repair_masked_fc(fc, action):
-    mean = fc.weight.mean().item()
+    mean = fc.weight[fc.weight != 0].mean().item()
     var = fc.weight.var().item()
     if action:
         fc.weight_orig.data -= mean
@@ -162,7 +162,7 @@ def __repair_masked_fc(fc, action):
 
 
 def __repair_fc(fc, action):
-    mean = fc.weight.mean().item()
+    mean = fc.weight[fc.weight != 0].mean().item()
     var = fc.weight.var().item()
     if action:
         fc.weight.data -= mean
