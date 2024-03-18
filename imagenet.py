@@ -75,7 +75,7 @@ def train(
     criterion = nn.CrossEntropyLoss()
     world_size = dist.get_world_size()
     optimizer = optim.SGD(
-        model.parameters(), lr=0.4 * (world_size**0.5), momentum=0.9, weight_decay=1e-4
+        model.parameters(), lr=0.4 * world_size, momentum=0.9, weight_decay=1e-4
     )
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[30, 60, 80], gamma=0.1
@@ -91,9 +91,9 @@ def train(
         pin_memory=True,
         sampler=train_datasampler,
     )
-    test_datasampler = torch.utils.data.distributed.DistributedSampler(
-        testset, shuffle=True
-    )
+    # test_datasampler = torch.utils.data.distributed.DistributedSampler(
+    #     testset, shuffle=True
+    # )
     testloader = DataLoaderX(
         testset,
         batch_size=128 * 4,
@@ -127,87 +127,89 @@ def train(
                 running_loss = 0.0
         scheduler.step()
 
-        # Calculate accuracy on train and test sets
-        correct_top1 = 0
-        correct_top5 = 0
-        total_top1 = 0
-        total_top5 = 0
-        model.eval()
-        with torch.no_grad():
-            test_loss = 0.0
-            for data in testloader:
-                images, labels = data
-                images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
-                # top-1
-                _, predicted = torch.max(outputs.data, 1)
-                test_loss += criterion(outputs, labels).item()
-                total_top1 += labels.size(0)
-                correct_top1 += (predicted == labels).sum().item()
+        if rank == 0:
+            # Calculate accuracy on train and test sets
+            correct_top1 = 0
+            correct_top5 = 0
+            total_top1 = 0
+            total_top5 = 0
+            model.eval()
+            with torch.no_grad():
+                test_loss = 0.0
+                for data in testloader:
+                    images, labels = data
+                    images, labels = images.to(device), labels.to(device)
+                    outputs = model(images)
+                    # top-1
+                    _, predicted = torch.max(outputs.data, 1)
+                    test_loss += criterion(outputs, labels).item()
+                    total_top1 += labels.size(0)
+                    correct_top1 += (predicted == labels).sum().item()
 
-                # top-5
-                _, predicted = torch.topk(outputs.data, 5, 1)
-                total_top5 += labels.size(0)
-                for i in range(5):
-                    correct_top5 += (predicted[:, i] == labels).sum().item()
+                    # top-5
+                    _, predicted = torch.topk(outputs.data, 5, 1)
+                    total_top5 += labels.size(0)
+                    for i in range(5):
+                        correct_top5 += (predicted[:, i] == labels).sum().item()
 
-        top1_accuracy = 100 * correct_top1 / total_top1
-        top5_accuracy = 100 * correct_top5 / total_top5
-        if top1_accuracy > best_top1:
-            best_top1 = top1_accuracy
-            torch.save(model.state_dict(), save_path + "/best.pth")
-        if top5_accuracy > best_top5:
-            best_top5 = top5_accuracy
+            top1_accuracy = 100 * correct_top1 / total_top1
+            top5_accuracy = 100 * correct_top5 / total_top5
+            if top1_accuracy > best_top1:
+                best_top1 = top1_accuracy
+                torch.save(model.state_dict(), save_path + "/best.pth")
+            if top5_accuracy > best_top5:
+                best_top5 = top5_accuracy
+            model.train()
 
         if rank == 0:
             writer.add_scalar("top-1", top1_accuracy, epoch)
             writer.add_scalar("top-5", top5_accuracy, epoch)
             writer.add_scalar("test loss", test_loss / len(testloader), epoch)
 
-    print(
-        "[GPU {:d}] Best top-1: {:.2f}% top-5: {:.2f}%".format(
-            rank, best_top1, best_top5
-        )
-    )
-    if rank == 0:
-        model.load_state_dict(torch.load(save_path + "/best.pth"))
-        correct_top1 = 0
-        correct_top5 = 0
-        total_top1 = 0
-        total_top5 = 0
-        dataloader = DataLoaderX(
-            testset,
-            batch_size=128 * 4,
-            num_workers=16,
-            pin_memory=True,
-            shuffle=False,
-        )
-        model.eval()
-        with torch.no_grad():
-            test_loss = 0.0
-            for data in testloader:
-                images, labels = data
-                images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
-                # top-1
-                _, predicted = torch.max(outputs.data, 1)
-                test_loss += criterion(outputs, labels).item()
-                total_top1 += labels.size(0)
-                correct_top1 += (predicted == labels).sum().item()
+    # print(
+    #     "[GPU {:d}] Best top-1: {:.2f}% top-5: {:.2f}%".format(
+    #         rank, best_top1, best_top5
+    #     )
+    # )
+    # if rank == 0:
+    #     model.load_state_dict(torch.load(save_path + "/best.pth"))
+    #     correct_top1 = 0
+    #     correct_top5 = 0
+    #     total_top1 = 0
+    #     total_top5 = 0
+    #     dataloader = DataLoaderX(
+    #         testset,
+    #         batch_size=128 * 4,
+    #         num_workers=16,
+    #         pin_memory=True,
+    #         shuffle=False,
+    #     )
+    #     model.eval()
+    #     with torch.no_grad():
+    #         test_loss = 0.0
+    #         for data in testloader:
+    #             images, labels = data
+    #             images, labels = images.to(device), labels.to(device)
+    #             outputs = model(images)
+    #             # top-1
+    #             _, predicted = torch.max(outputs.data, 1)
+    #             test_loss += criterion(outputs, labels).item()
+    #             total_top1 += labels.size(0)
+    #             correct_top1 += (predicted == labels).sum().item()
 
-                # top-5
-                _, predicted = torch.topk(outputs.data, 5, 1)
-                total_top5 += labels.size(0)
-                for i in range(5):
-                    correct_top5 += (predicted[:, i] == labels).sum().item()
+    #             # top-5
+    #             _, predicted = torch.topk(outputs.data, 5, 1)
+    #             total_top5 += labels.size(0)
+    #             for i in range(5):
+    #                 correct_top5 += (predicted[:, i] == labels).sum().item()
 
-        top1_accuracy = 100 * correct_top1 / total_top1
-        top5_accuracy = 100 * correct_top5 / total_top5
-        print(
-            "Overall top-1: {:.2f}% top-5: {:.2f}%".format(top1_accuracy, top5_accuracy)
-        )
-        writer.add_scalar("Overall top-1", top1_accuracy, 0)
-        writer.add_scalar("Overall top-5", top5_accuracy, 0)
+    #     top1_accuracy = 100 * correct_top1 / total_top1
+    #     top5_accuracy = 100 * correct_top5 / total_top5
+    #     print(
+    #         "Overall top-1: {:.2f}% top-5: {:.2f}%".format(top1_accuracy, top5_accuracy)
+    #     )
+    #     writer.add_scalar("Overall top-1", top1_accuracy, 0)
+    #     writer.add_scalar("Overall top-5", top5_accuracy, 0)
 
     # Close TensorBoard writer
     if writer is not None:

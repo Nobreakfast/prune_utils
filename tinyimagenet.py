@@ -75,7 +75,7 @@ def train(
     criterion = nn.CrossEntropyLoss()
     world_size = dist.get_world_size()
     optimizer = optim.SGD(
-        model.parameters(), lr=0.2 * (world_size**0.5), momentum=0.9, weight_decay=1e-4
+        model.parameters(), lr=0.2 * world_size, momentum=0.9, weight_decay=1e-4
     )
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[40, 60, 80], gamma=0.1
@@ -90,15 +90,15 @@ def train(
         pin_memory=True,
         sampler=train_sampler,
     )
-    test_sampler = torch.utils.data.distributed.DistributedSampler(
-        testset, shuffle=True
-    )
+    # test_sampler = torch.utils.data.distributed.DistributedSampler(
+    #     testset, shuffle=True
+    # )
     testloader = DataLoaderX(
         testset,
         batch_size=256 * 8,
         num_workers=4,
         pin_memory=True,
-        sampler=test_sampler,
+        # sampler=test_sampler,
     )
 
     # Training loop
@@ -119,64 +119,66 @@ def train(
             optimizer.step()
 
             running_loss += loss.item()
-            if i % 20 == 19 and writer is not None:
+            if i % 200 == 199 and writer is not None:
                 writer.add_scalar(
                     "training loss", running_loss / 200, epoch * len(trainloader) + i
                 )
                 running_loss = 0.0
         scheduler.step()
 
-        # Calculate accuracy on train and test sets
-        correct_test = 0
-        total_test = 0
-        model.eval()
-        with torch.no_grad():
-            test_loss = 0.0
-            for data in testloader:
-                images, labels = data
-                images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
-                _, predicted = torch.max(outputs.data, 1)
-                test_loss += criterion(outputs, labels).item()
-                total_test += labels.size(0)
-                correct_test += (predicted == labels).sum().item()
+        if rank == 0:
+            # Calculate accuracy on train and test sets
+            correct_test = 0
+            total_test = 0
+            model.eval()
+            with torch.no_grad():
+                test_loss = 0.0
+                for data in testloader:
+                    images, labels = data
+                    images, labels = images.to(device), labels.to(device)
+                    outputs = model(images)
+                    _, predicted = torch.max(outputs.data, 1)
+                    test_loss += criterion(outputs, labels).item()
+                    total_test += labels.size(0)
+                    correct_test += (predicted == labels).sum().item()
 
-        test_accuracy = 100 * correct_test / total_test
-        if test_accuracy > best:
-            best = test_accuracy
-            torch.save(model.state_dict(), save_path + "/best.pth")
+            test_accuracy = 100 * correct_test / total_test
+            if test_accuracy > best:
+                best = test_accuracy
+                torch.save(model.state_dict(), save_path + "/best.pth")
+            model.train()
 
         if rank == 0:
             writer.add_scalar("test accuracy", test_accuracy, epoch)
             writer.add_scalar("test loss", test_loss / len(testloader), epoch)
 
-    print("Best test accuracy: {:.2f}% in [GPU {:d}]".format(best, rank))
+        # print("Best test accuracy: {:.2f}% in [GPU {:d}]".format(best, rank))
 
-    if rank == 0:
-        model.load_state_dict(torch.load(save_path + "/best.pth"))
-        correct_test = 0
-        total_test = 0
-        dataloader = DataLoaderX(
-            testset,
-            batch_size=256 * 8,
-            num_workers=16,
-            pin_memory=True,
-        )
-        model.eval()
-        with torch.no_grad():
-            test_loss = 0.0
-            for data in testloader:
-                images, labels = data
-                images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
-                _, predicted = torch.max(outputs.data, 1)
-                test_loss += criterion(outputs, labels).item()
-                total_test += labels.size(0)
-                correct_test += (predicted == labels).sum().item()
+    # if rank == 0:
+    #     model.load_state_dict(torch.load(save_path + "/best.pth"))
+    #     correct_test = 0
+    #     total_test = 0
+    #     dataloader = DataLoaderX(
+    #         testset,
+    #         batch_size=256 * 8,
+    #         num_workers=16,
+    #         pin_memory=True,
+    #     )
+    #     model.eval()
+    #     with torch.no_grad():
+    #         test_loss = 0.0
+    #         for data in testloader:
+    #             images, labels = data
+    #             images, labels = images.to(device), labels.to(device)
+    #             outputs = model(images)
+    #             _, predicted = torch.max(outputs.data, 1)
+    #             test_loss += criterion(outputs, labels).item()
+    #             total_test += labels.size(0)
+    #             correct_test += (predicted == labels).sum().item()
 
-        test_accuracy = 100 * correct_test / total_test
-        print("Overall test accuracy: {:.2f}%".format(test_accuracy, rank))
-        writer.add_scalar("Overall test accuracy", test_accuracy, 0)
+    #     test_accuracy = 100 * correct_test / total_test
+    #     print("Overall test accuracy: {:.2f}%".format(test_accuracy, rank))
+    #     writer.add_scalar("Overall test accuracy", test_accuracy, 0)
 
     # Close TensorBoard writer
     if writer is not None:
