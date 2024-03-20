@@ -124,7 +124,14 @@ if __name__ == "__main__":
 
         model = fc.FCN(3)
 
-    initialization(model, args.im)
+    if args.im == "lsuv":
+        from lsuv import lsuv_with_dataloader
+
+        device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
+        model = model.to(device)
+        model = lsuv_with_dataloader(model, trainloader, device=device)
+    else:
+        initialization(model, args.im)
 
     if args.prune != 0.0:
         print(f"Original Sparsity: {cal_sparsity(model)}%")

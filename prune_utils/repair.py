@@ -22,38 +22,65 @@ def repair_model_vgg(model, restore):
         B = True
     elif restore == 3:
         W, B = True, True
+    elif restore == 11:  # restore to the original distribution
+        raise NotImplementedError
+    elif restore == 12:  # restore saved to the original distribution
+        raise NotImplementedError
+    elif restore == 13:  # restore to the EOC
+        raise NotImplementedError
+    elif restore == 14:  # restore saved to the EOC
+        raise NotImplementedError
+    elif restore == 15:  # restore to fixup
+        raise NotImplementedError
+    elif restore == 17:  # Random walk
+        raise NotImplementedError
+    elif restore == 18:  # Random walk saved
+        raise NotImplementedError
+    elif restore == 19:  # Hints initialization
+        raise NotImplementedError
+    elif restore == 20:  # Hints initialization saved
+        raise NotImplementedError
+    elif restore == 21:  # orthogonal initialization
+        raise NotImplementedError
+    elif restore == 22:  # orthogonal initialization saved
+        raise NotImplementedError
 
-    for n, m in model.named_modules():
-        if isinstance(m, nn.Conv2d):
-            lv = repair_conv(m, W)
-            if B:
-                name_split = n.split(".")
-                bn_name = ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
-                try:
-                    bn = __getattr(model, bn_name)
-                    if not isinstance(bn, nn.BatchNorm2d):
-                        print(f"{bn_name} not correct")
-                        continue
-                    repair_bn(bn, lv)
-                    print(f"{bn_name} founded")
-                except:
-                    print(f"{bn_name} not found")
-                    pass
-        elif isinstance(m, nn.Linear):
-            lv = repair_fc(m, W)
-            if B:
-                name_split = n.split(".")
-                bn_name = ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
-                try:
-                    bn = __getattr(model, bn_name)
-                    if not isinstance(bn, nn.BatchNorm1d):
-                        print(f"{bn_name} not correct")
-                        continue
-                    repair_bn(bn, lv)
-                    print(f"{bn_name} founded")
-                except:
-                    print(f"{bn_name} not found")
-                    pass
+    if W or B:
+        for n, m in model.named_modules():
+            if isinstance(m, nn.Conv2d):
+                lv = repair_conv(m, W)
+                if B:
+                    name_split = n.split(".")
+                    bn_name = (
+                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
+                    )
+                    try:
+                        bn = __getattr(model, bn_name)
+                        if not isinstance(bn, nn.BatchNorm2d):
+                            # print(f"{bn_name} not correct")
+                            continue
+                        repair_bn(bn, lv)
+                        # print(f"{bn_name} founded")
+                    except:
+                        # print(f"{bn_name} not found")
+                        pass
+            elif isinstance(m, nn.Linear):
+                lv = repair_fc(m, W)
+                if B:
+                    name_split = n.split(".")
+                    bn_name = (
+                        ".".join(name_split[:-1]) + "." + str(int(name_split[-1]) + 1)
+                    )
+                    try:
+                        bn = __getattr(model, bn_name)
+                        if not isinstance(bn, nn.BatchNorm1d):
+                            # print(f"{bn_name} not correct")
+                            continue
+                        repair_bn(bn, lv)
+                        # print(f"{bn_name} founded")
+                    except:
+                        # print(f"{bn_name} not found")
+                        pass
 
 
 def repair_model(model, restore):
@@ -64,36 +91,61 @@ def repair_model(model, restore):
         B = True
     elif restore == 3:
         W, B = True, True
+    elif restore == 11:  # restore to the original distribution
+        raise NotImplementedError
+    elif restore == 12:  # restore saved to the original distribution
+        raise NotImplementedError
+    elif restore == 13:  # restore to the EOC
+        raise NotImplementedError
+    elif restore == 14:  # restore saved to the EOC
+        raise NotImplementedError
+    elif restore == 15:  # restore to fixup
+        raise NotImplementedError
+    elif restore == 16:  # restore saved to fixup
+        raise NotImplementedError
+    elif restore == 17:  # Random walk
+        raise NotImplementedError
+    elif restore == 18:  # Random walk saved
+        raise NotImplementedError
+    elif restore == 19:  # Hints initialization
+        raise NotImplementedError
+    elif restore == 20:  # Hints initialization saved
+        raise NotImplementedError
+    elif restore == 21:  # orthogonal initialization
+        raise NotImplementedError
+    elif restore == 22:  # orthogonal initialization saved
+        raise NotImplementedError
 
-    for n, m in model.named_modules():
-        if isinstance(m, nn.Conv2d):
-            lv = repair_conv(m, W)
-            if B:
-                bn_name = n.replace("conv", "bn")
-                try:
-                    bn = __getattr(model, bn_name)
-                    if not isinstance(bn, nn.BatchNorm2d):
-                        # print(f"{bn_name} not correct")
-                        continue
-                    repair_bn(bn, lv)
-                    # print(f"{bn_name} founded")
-                except:
-                    # print(f"{bn_name} not found")
-                    pass
-        elif isinstance(m, nn.Linear):
-            lv = repair_fc(m, W)
-            if B:
-                bn_name = n.replace("fc", "bn")
-                try:
-                    bn = __getattr(model, bn_name)
-                    if not isinstance(bn, nn.BatchNorm1d):
-                        # print(f"{bn_name} not correct")
-                        continue
-                    repair_bn(bn, lv)
-                    # print(f"{bn_name} founded")
-                except:
-                    # print(f"{bn_name} not found")
-                    pass
+    if W or B:
+        for n, m in model.named_modules():
+            if isinstance(m, nn.Conv2d):
+                lv = repair_conv(m, W)
+                if B:
+                    bn_name = n.replace("conv", "bn")
+                    try:
+                        bn = __getattr(model, bn_name)
+                        if not isinstance(bn, nn.BatchNorm2d):
+                            # print(f"{bn_name} not correct")
+                            continue
+                        repair_bn(bn, lv)
+                        # print(f"{bn_name} founded")
+                    except:
+                        # print(f"{bn_name} not found")
+                        pass
+            elif isinstance(m, nn.Linear):
+                lv = repair_fc(m, W)
+                if B:
+                    bn_name = n.replace("fc", "bn")
+                    try:
+                        bn = __getattr(model, bn_name)
+                        if not isinstance(bn, nn.BatchNorm1d):
+                            # print(f"{bn_name} not correct")
+                            continue
+                        repair_bn(bn, lv)
+                        # print(f"{bn_name} founded")
+                    except:
+                        # print(f"{bn_name} not found")
+                        pass
 
 
 def repair_conv(conv, action=True):
@@ -106,7 +158,7 @@ def repair_conv(conv, action=True):
 def __repair_masked_conv(conv, action):
     mean = conv.weight[conv.weight != 0].mean().item()
     var = conv.weight.var().item()
-    if action:
+    if action and mean.abs() <= 1e-2:
         conv.weight_orig.data -= mean
         conv.weight.data = conv.weight_orig * conv.weight_mask
     try:
@@ -127,7 +179,7 @@ def __repair_masked_conv(conv, action):
 def __repair_conv(conv, action):
     mean = conv.weight.mean().item()
     var = conv.weight.var().item()
-    if action:
+    if action and mean.abs() <= 1e-2:
         conv.weight.data -= mean
     try:
         sn = torch.linalg.norm(conv.weight.view(conv.weight.shape[0], -1), ord=2).item()
@@ -153,7 +205,7 @@ def repair_fc(fc, action=True):
 def __repair_masked_fc(fc, action):
     mean = fc.weight[fc.weight != 0].mean().item()
     var = fc.weight.var().item()
-    if action:
+    if action and mean.abs() <= 1e-2:
         fc.weight_orig.data -= mean
         fc.weight.data = fc.weight_orig * fc.weight_mask
     try:
@@ -173,7 +225,7 @@ def __repair_masked_fc(fc, action):
 def __repair_fc(fc, action):
     mean = fc.weight.mean().item()
     var = fc.weight.var().item()
-    if action:
+    if action and mean.abs() <= 1e-2:
         fc.weight.data -= mean
     try:
         sn = torch.linalg.norm(fc.weight, ord=2).item()

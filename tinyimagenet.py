@@ -55,6 +55,20 @@ if __name__ == "__main__":
 
     [trainset, testset] = tinyimagenet(256, "/root/autodl-tmp/tiny-imagenet-200")
 
+    trainloader = DataLoaderX(
+        trainset,
+        batch_size=256,
+        num_workers=4,
+        pin_memory=True,
+        shuffle=True,
+    )
+    testloader = DataLoaderX(
+        testset,
+        batch_size=256 * 8,
+        num_workers=4,
+        pin_memory=True,
+    )
+
     if args.model == "resnet18":
         from models.resnet_ori import resnet18
 
@@ -66,7 +80,14 @@ if __name__ == "__main__":
     else:
         raise ValueError("model not found")
 
-    initialization(model, args.im)
+    if args.im == "lsuv":
+        from lsuv import lsuv_with_dataloader
+
+        device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
+        model = model.to(device)
+        model = lsuv_with_dataloader(model, trainloader, device=device)
+    else:
+        initialization(model, args.im)
 
     if args.prune != 0.0:
         print(f"Original Sparsity: {cal_sparsity(model)}%")
@@ -130,19 +151,6 @@ if __name__ == "__main__":
     optimizer = optim.SGD(model.parameters(), lr=0.2, momentum=0.9, weight_decay=5e-4)
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[40, 60, 80], gamma=0.1
-    )
-    trainloader = DataLoaderX(
-        trainset,
-        batch_size=256,
-        num_workers=4,
-        pin_memory=True,
-        shuffle=True,
-    )
-    testloader = DataLoaderX(
-        testset,
-        batch_size=256 * 8,
-        num_workers=4,
-        pin_memory=True,
     )
 
     # Training loop
