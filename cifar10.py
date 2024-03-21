@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
     # Set up TensorBoard writer with log directory
     # save_path = f"logs/cifar10/{args.model}/{args.im}_p{args.prune:.2f}_r{args.restore}_no.{args.save}"
-    save_path = f"logs/cifar10/{args.model}/{args.im}/{args.algorithm}/{args.prune:.2f}r{args.restore}/no.{args.save}"
+    save_path = f"logs/cifar10/{args.model}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
     writer = SummaryWriter(log_dir=save_path)
 
     # Load CIFAR-10 dataset

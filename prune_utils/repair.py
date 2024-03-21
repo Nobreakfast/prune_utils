@@ -158,7 +158,7 @@ def repair_conv(conv, action=True):
 def __repair_masked_conv(conv, action):
     mean = conv.weight[conv.weight != 0].mean().item()
     var = conv.weight.var().item()
-    if action and mean.abs() <= 1e-2:
+    if action and abs(mean) <= 1e-2:
         conv.weight_orig.data -= mean
         conv.weight.data = conv.weight_orig * conv.weight_mask
     try:
@@ -179,7 +179,7 @@ def __repair_masked_conv(conv, action):
 def __repair_conv(conv, action):
     mean = conv.weight.mean().item()
     var = conv.weight.var().item()
-    if action and mean.abs() <= 1e-2:
+    if action and abs(mean) <= 1e-2:
         conv.weight.data -= mean
     try:
         sn = torch.linalg.norm(conv.weight.view(conv.weight.shape[0], -1), ord=2).item()
@@ -205,7 +205,7 @@ def repair_fc(fc, action=True):
 def __repair_masked_fc(fc, action):
     mean = fc.weight[fc.weight != 0].mean().item()
     var = fc.weight.var().item()
-    if action and mean.abs() <= 1e-2:
+    if action and abs(mean) <= 1e-2:
         fc.weight_orig.data -= mean
         fc.weight.data = fc.weight_orig * fc.weight_mask
     try:
@@ -225,7 +225,7 @@ def __repair_masked_fc(fc, action):
 def __repair_fc(fc, action):
     mean = fc.weight.mean().item()
     var = fc.weight.var().item()
-    if action and mean.abs() <= 1e-2:
+    if action and abs(mean) <= 1e-2:
         fc.weight.data -= mean
     try:
         sn = torch.linalg.norm(fc.weight, ord=2).item()
