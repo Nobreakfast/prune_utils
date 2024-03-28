@@ -44,6 +44,10 @@ def repair_model_vgg(model, restore):
         raise NotImplementedError
     elif restore == 22:  # orthogonal initialization saved
         raise NotImplementedError
+    elif restore == 23:  # spectrum initialization
+        raise NotImplementedError
+    elif restore == 24:  # spectrum initialization saved
+        raise NotImplementedError
 
     if W or B:
         for n, m in model.named_modules():
@@ -115,10 +119,15 @@ def repair_model(model, restore):
         raise NotImplementedError
     elif restore == 22:  # orthogonal initialization saved
         raise NotImplementedError
+    elif restore == 23:  # spectrum initialization
+        raise NotImplementedError
+    elif restore == 24:  # spectrum initialization saved
+        raise NotImplementedError
 
     if W or B:
         for n, m in model.named_modules():
             if isinstance(m, nn.Conv2d):
+                # print(n)
                 lv = repair_conv(m, W)
                 if B:
                     bn_name = n.replace("conv", "bn")
@@ -128,11 +137,13 @@ def repair_model(model, restore):
                             # print(f"{bn_name} not correct")
                             continue
                         repair_bn(bn, lv)
+                        # print(n, lv)
                         # print(f"{bn_name} founded")
                     except:
                         # print(f"{bn_name} not found")
                         pass
             elif isinstance(m, nn.Linear):
+                # print(n)
                 lv = repair_fc(m, W)
                 if B:
                     bn_name = n.replace("fc", "bn")
@@ -165,6 +176,7 @@ def __repair_masked_conv(conv, action):
         sn = torch.linalg.norm(conv.weight.view(conv.weight.shape[0], -1), ord=2).item()
     except:
         sn = 1
+    # print(sn)
     if action:
         conv.weight_orig.data /= sn
         conv.weight.data = conv.weight_orig * conv.weight_mask
@@ -212,6 +224,7 @@ def __repair_masked_fc(fc, action):
         sn = torch.linalg.norm(fc.weight, ord=2).item()
     except:
         sn = 1
+    # print(sn)
     if action:
         fc.weight_orig.data /= sn
         fc.weight.data = fc.weight_orig * fc.weight_mask

@@ -30,6 +30,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch CIFAR100 Training")
     parser.add_argument("-s", "--save", help="save path", default="0")
     parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
+    parser.add_argument("-e", "--epoch", help="epoch", type=int, default=135)
     parser.add_argument("-a", "--algorithm", help="prune algorithm", default="nonprune")
     parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
     parser.add_argument(
@@ -154,7 +155,7 @@ if __name__ == "__main__":
 
     # Training loop
     best = 0
-    for epoch in tqdm.trange(135):
+    for epoch in tqdm.trange(args.epoch):
         running_loss = 0.0
         model.train()
         for i, data in enumerate(trainloader, 0):

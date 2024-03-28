@@ -17,6 +17,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch CIFAR10 Training")
     parser.add_argument("-s", "--save", help="save path", default="test")
+    parser.add_argument("-e", "--epoch", help="epoch", type=int, default=160)
     parser.add_argument("-p", "--prune", help="prune rate", type=float, default=0.0)
     parser.add_argument("-a", "--algorithm", help="prune algorithm", default="nonprune")
     parser.add_argument("-r", "--restore", help="restore type", type=int, default=0)
@@ -51,7 +52,7 @@ if __name__ == "__main__":
 
     # Set up TensorBoard writer with log directory
     # save_path = f"logs/cifar10/{args.model}/{args.im}_p{args.prune:.2f}_r{args.restore}_no.{args.save}"
-    save_path = f"logs/cifar10/{args.model}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
+    save_path = f"logs/cifar10/{args.model}_{args.alpha}_{args.beta}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
     writer = SummaryWriter(log_dir=save_path)
 
     # Load CIFAR-10 dataset
@@ -96,7 +97,10 @@ if __name__ == "__main__":
         from models.resnet_res import resnet20
 
         model = resnet20(args.alpha, args.beta)
+    elif args.model == "resnet18":
+        from models.resnet_ori import resnet18
 
+        model = resnet18(num_classes=10)
     elif args.model[:2] == "fc":
         import models.fc as fc
 
@@ -130,11 +134,17 @@ if __name__ == "__main__":
         device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
         model = model.to(device)
         model = lsuv_with_dataloader(model, trainloader, device=device)
+    elif args.im == "lipz":
+        initialization(model, "kaiming_in")
+        repair_model(model, 1)
+    elif args.im == "rei":
+        initialization(model, "kaiming_in")
+        repair_model(model, 3)
     else:
         initialization(model, args.im)
 
     if args.prune != 0.0:
-        print(f"Original Sparsity: {cal_sparsity(model)}%")
+        print(f"Original Sparsity: {cal_sparsity(model)}")
         if args.algorithm == "rand":
             score_dict = rand(model)
             threshold = cal_threshold(score_dict, args.prune)
@@ -173,7 +183,7 @@ if __name__ == "__main__":
                     prune.random_unstructured(m, name="weight", amount=args.prune)
                 elif isinstance(m, nn.Linear):
                     prune.random_unstructured(m, name="weight", amount=args.prune)
-        print(f"Pruned Sparsity: {cal_sparsity(model)}%")
+        print(f"Pruned Sparsity: {cal_sparsity(model)}")
         for name, m in model.named_modules():
             if isinstance(m, (nn.Conv2d, nn.Linear)):
                 print(f"{name} sparsity: {cal_sparsity(m)}")
@@ -191,7 +201,7 @@ if __name__ == "__main__":
 
     # Training loop
     best = 0
-    for epoch in tqdm.trange(160):
+    for epoch in tqdm.trange(args.epoch, desc="Epoch", unit="epoch"):
         running_loss = 0.0
         model.train()
         for i, data in enumerate(trainloader, 0):
