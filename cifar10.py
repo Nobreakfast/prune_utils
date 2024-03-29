@@ -182,17 +182,19 @@ if __name__ == "__main__":
             model = model.to(device)
             example_data = torch.randn(1, 3, 32, 32)
             sign_dict = linearize(model)
-            for module in model.modules():
-                if isinstance(module, nn.Conv2d):
-                    sn = torch.linalg.norm(
-                        module.weight.view(module.weight.shape[0], -1), ord=2
-                    ).item()
-                    module.weight.data /= sn
-                elif isinstance(module, nn.Linear):
-                    sn = torch.linalg.norm(module.weight, ord=2).item()
-                    module.weight.data /= sn
             iterations = 100
             for i in range(iterations):
+                for module in model.modules():
+                    if isinstance(module, nn.Conv2d):
+                        sn = torch.linalg.norm(
+                            module.weight.view(module.weight.shape[0], -1), ord=2
+                        ).item()
+                        # print(sn)
+                        module.weight.data /= sn
+                    elif isinstance(module, nn.Linear):
+                        sn = torch.linalg.norm(module.weight, ord=2).item()
+                        module.weight.data /= sn
+                        # print(sn)
                 prune_ratio = args.prune / iterations * (i + 1)
                 score_dict = synflow(model, example_data)
                 threshold = cal_threshold(score_dict, prune_ratio)
