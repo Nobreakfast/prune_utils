@@ -177,6 +177,32 @@ if __name__ == "__main__":
                     nonlinearize(model, sign_dict)
                     apply_prune(model, score_dict, threshold)
             model = model.to(torch.device("cpu"))
+        elif args.algorithm == "synflow_repair":
+            device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
+            model = model.to(device)
+            example_data = torch.randn(1, 3, 32, 32)
+            sign_dict = linearize(model)
+            for module in model.modules():
+                if isinstance(module, nn.Conv2d):
+                    sn = torch.linalg.norm(
+                        module.weight.view(module.weight.shape[0], -1), ord=2
+                    ).item()
+                    module.weight.data /= sn
+                elif isinstance(module, nn.Linear):
+                    sn = torch.linalg.norm(module.weight, ord=2).item()
+                    module.weight.data /= sn
+            iterations = 100
+            for i in range(iterations):
+                prune_ratio = args.prune / iterations * (i + 1)
+                score_dict = synflow(model, example_data)
+                threshold = cal_threshold(score_dict, prune_ratio)
+                if i != iterations - 1:
+                    apply_prune(model, score_dict, threshold)
+                    remove_mask(model)
+                else:
+                    nonlinearize(model, sign_dict)
+                    apply_prune(model, score_dict, threshold)
+            model = model.to(torch.device("cpu"))
         else:
             for name, m in model.named_modules():
                 if isinstance(m, nn.Conv2d):
