@@ -286,17 +286,13 @@ if __name__ == "__main__":
             for i in range(iterations):
                 for name, m in model.named_modules():
                     if isinstance(m, nn.Conv2d):
-                        mean = module.weight[module.weight != 0].mean().item()
-                        module.weight_orig.data -= mean
                         sn = torch.linalg.norm(
                             m.weight.view(m.weight.shape[0], -1), ord=2
                         ).item()
-                        m.weight_orig.data /= sn
+                        m.weight.data /= sn
                     elif isinstance(m, nn.Linear):
-                        mean = module.weight[module.weight != 0].mean().item()
-                        module.weight_orig.data -= mean
                         sn = torch.linalg.norm(m.weight, ord=2).item()
-                        m.weight_orig.data /= sn
+                        m.weight.data /= sn
                 prune_ratio = args.prune / iterations * (i + 1)
                 score_dict = synflow(model, example_data)
                 threshold = cal_threshold(score_dict, prune_ratio)
