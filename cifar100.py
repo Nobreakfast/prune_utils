@@ -140,12 +140,16 @@ if __name__ == "__main__":
             for i in range(iterations):
                 for module in model.modules():
                     if isinstance(module, nn.Conv2d):
+                        mean = module.weight[module.weight != 0].mean().item()
+                        module.weight_orig.data -= mean
                         sn = torch.linalg.norm(
                             module.weight.view(module.weight.shape[0], -1), ord=2
                         ).item()
                         # print(sn)
                         module.weight.data /= sn
                     elif isinstance(module, nn.Linear):
+                        mean = module.weight[module.weight != 0].mean().item()
+                        module.weight_orig.data -= mean
                         sn = torch.linalg.norm(module.weight, ord=2).item()
                         module.weight.data /= sn
                         # print(sn)

@@ -101,6 +101,14 @@ if __name__ == "__main__":
         from models.resnet_ori import resnet18
 
         model = resnet18(num_classes=10)
+    elif args.model == "resnet101":
+        from models.resnet_ori import resnet101
+
+        model = resnet101(num_classes=10)
+    elif args.model == "resnet101_wobn":
+        from models.resnet_ori_wobn import resnet101
+
+        model = resnet101(num_classes=10)
     elif args.model[:2] == "fc":
         import models.fc as fc
 
@@ -182,16 +190,20 @@ if __name__ == "__main__":
             model = model.to(device)
             example_data = torch.randn(1, 3, 32, 32)
             sign_dict = linearize(model)
-            iterations = 100
+            iterations = 10
             for i in range(iterations):
                 for module in model.modules():
                     if isinstance(module, nn.Conv2d):
+                        mean = module.weight[module.weight != 0].mean().item()
+                        module.weight_orig.data -= mean
                         sn = torch.linalg.norm(
                             module.weight.view(module.weight.shape[0], -1), ord=2
                         ).item()
                         # print(sn)
                         module.weight.data /= sn
                     elif isinstance(module, nn.Linear):
+                        mean = module.weight[module.weight != 0].mean().item()
+                        module.weight_orig.data -= mean
                         sn = torch.linalg.norm(module.weight, ord=2).item()
                         module.weight.data /= sn
                         # print(sn)
