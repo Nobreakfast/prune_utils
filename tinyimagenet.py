@@ -53,7 +53,7 @@ if __name__ == "__main__":
     os.system(f"mkdir -p {save_path}")
     writer = SummaryWriter(log_dir=save_path)
 
-    [trainset, testset] = tinyimagenet(256, "/root/autodl-tmp/tiny-imagenet-200")
+    [trainset, testset] = tinyimagenet(256, "/home/allen/Data/tiny-imagenet-200")
 
     trainloader = DataLoaderX(
         trainset,

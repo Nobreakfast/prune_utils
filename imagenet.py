@@ -212,7 +212,7 @@ if __name__ == "__main__":
     save_path = f"logs/imagenet/{args.model}_{args.alpha}_{args.beta}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
     os.system(f"mkdir -p {save_path}")
 
-    [trainset, testset] = imagenet("/root/autodl-tmp/imagenet")
+    [trainset, testset] = imagenet("/home/allen/Data/imagenet")
 
     if args.model == "resnet50":
         from models.resnet_imagenet import resnet50
