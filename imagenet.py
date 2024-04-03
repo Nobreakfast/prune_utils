@@ -46,6 +46,7 @@ def parallel_main(
     trainset,
     testset,
     save_path,
+    model,
 ):
     init_parallel(rank, world_size, port)
 
@@ -53,6 +54,7 @@ def parallel_main(
         trainset,
         testset,
         save_path,
+        model,
     )
 
 
@@ -60,23 +62,106 @@ def train(
     trainset,
     testset,
     save_path,
+    model,
 ):
     rank = dist.get_rank()
     if rank == 0:
         writer = SummaryWriter(log_dir=save_path)
     else:
         writer = None
+        testset = None
 
-    model = torch.load(save_path + "/init.pt")
+    if args.prune != 0.0:
+        print(f"Original Sparsity: {cal_sparsity(model)}%")
+        if args.algorithm == "rand":
+            score_dict = rand(model)
+            threshold = cal_threshold(score_dict, args.prune)
+            apply_prune(model, score_dict, threshold)
+        elif args.algorithm == "randn":
+            score_dict = randn(model)
+            threshold = cal_threshold(score_dict, args.prune)
+            apply_prune(model, score_dict, threshold)
+        elif args.algorithm == "snip":
+            trainloader = DataLoaderX(
+                trainset,
+                batch_size=128,
+                num_workers=1,
+                pin_memory=False,
+                shuffle=True,
+            )
+            device = torch.device(
+                f"cuda:{rank}" if torch.cuda.is_available() else "cpu"
+            )
+            model = model.to(device)
+            score_dict = snip(model, trainloader)
+            threshold = cal_threshold(score_dict, args.prune)
+            apply_prune(model, score_dict, threshold)
+            model = model.to(torch.device("cpu"))
+        elif args.algorithm == "synflow":
+            device = torch.device(
+                f"cuda:{rank}" if torch.cuda.is_available() else "cpu"
+            )
+            model = model.to(device)
+            example_data = torch.randn(1, 3, 224, 224)
+            sign_dict = linearize(model)
+            iterations = 100
+            for i in range(iterations):
+                prune_ratio = args.prune / iterations * (i + 1)
+                score_dict = synflow(model, example_data)
+                threshold = cal_threshold(score_dict, prune_ratio)
+                if i != iterations - 1:
+                    apply_prune(model, score_dict, threshold)
+                    remove_mask(model)
+                else:
+                    nonlinearize(model, sign_dict)
+                    apply_prune(model, score_dict, threshold)
+            model = model.to(torch.device("cpu"))
+        elif args.algorithm == "synflow_repair":
+            device = torch.device(
+                f"cuda:{rank}" if torch.cuda.is_available() else "cpu"
+            )
+            model = model.to(device)
+            example_data = torch.randn(1, 3, 224, 224)
+            sign_dict = linearize(model)
+            iterations = 10
+            for i in range(iterations):
+                for name, m in model.named_modules():
+                    if isinstance(m, nn.Conv2d):
+                        sn = torch.linalg.norm(
+                            m.weight.view(m.weight.shape[0], -1), ord=2
+                        ).item()
+                        m.weight.data /= sn
+                    elif isinstance(m, nn.Linear):
+                        sn = torch.linalg.norm(m.weight, ord=2).item()
+                        m.weight.data /= sn
+                prune_ratio = args.prune / iterations * (i + 1)
+                score_dict = synflow(model, example_data)
+                threshold = cal_threshold(score_dict, prune_ratio)
+                if i != iterations - 1:
+                    apply_prune(model, score_dict, threshold)
+                    remove_mask(model)
+                else:
+                    nonlinearize(model, sign_dict)
+                    apply_prune(model, score_dict, threshold)
+            model = model.to(torch.device("cpu"))
+        else:
+            for name, m in model.named_modules():
+                if isinstance(m, nn.Conv2d):
+                    prune.random_unstructured(m, name="weight", amount=args.prune)
+                elif isinstance(m, nn.Linear):
+                    prune.random_unstructured(m, name="weight", amount=args.prune)
+        print(f"Pruned Sparsity: {cal_sparsity(model)}")
+        # for name, m in model.named_modules():
+        #     if isinstance(m, (nn.Conv2d, nn.Linear)):
+        #         print(f"{name} sparsity: {cal_sparsity(m)}")
+
     device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     model = DDP(model, device_ids=[rank])
 
     criterion = nn.CrossEntropyLoss()
     world_size = dist.get_world_size()
-    optimizer = optim.SGD(
-        model.parameters(), lr=0.4 * world_size, momentum=0.9, weight_decay=1e-4
-    )
+    optimizer = optim.SGD(model.parameters(), lr=0.4, momentum=0.9, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[30, 60, 80], gamma=0.1
     )
@@ -94,13 +179,13 @@ def train(
     # test_datasampler = torch.utils.data.distributed.DistributedSampler(
     #     testset, shuffle=True
     # )
-    testloader = DataLoaderX(
-        testset,
-        batch_size=128 * 4,
-        num_workers=4,
-        pin_memory=True,
-        sampler=test_datasampler,
-    )
+    if rank == 0:
+        testloader = DataLoaderX(
+            testset,
+            batch_size=128 * 4,
+            num_workers=4,
+            pin_memory=True,
+        )
     # Training loop
     best_top1 = 0
     best_top5 = 0
@@ -236,95 +321,14 @@ if __name__ == "__main__":
     else:
         initialization(model, args.im)
 
-    if args.prune != 0.0:
-        print(f"Original Sparsity: {cal_sparsity(model)}%")
-        if args.algorithm == "rand":
-            score_dict = rand(model)
-            threshold = cal_threshold(score_dict, args.prune)
-            apply_prune(model, score_dict, threshold)
-        elif args.algorithm == "randn":
-            score_dict = randn(model)
-            threshold = cal_threshold(score_dict, args.prune)
-            apply_prune(model, score_dict, threshold)
-        elif args.algorithm == "snip":
-            trainloader = DataLoaderX(
-                trainset,
-                batch_size=128,
-                num_workers=1,
-                pin_memory=False,
-                shuffle=True,
-            )
-            device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
-            model = model.to(device)
-            score_dict = snip(model, trainloader)
-            threshold = cal_threshold(score_dict, args.prune)
-            apply_prune(model, score_dict, threshold)
-            model = model.to(torch.device("cpu"))
-        elif args.algorithm == "synflow":
-            device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
-            model = model.to(device)
-            example_data = torch.randn(1, 3, 224, 224)
-            sign_dict = linearize(model)
-            iterations = 100
-            for i in range(iterations):
-                prune_ratio = args.prune / iterations * (i + 1)
-                score_dict = synflow(model, example_data)
-                threshold = cal_threshold(score_dict, prune_ratio)
-                if i != iterations - 1:
-                    apply_prune(model, score_dict, threshold)
-                    remove_mask(model)
-                else:
-                    nonlinearize(model, sign_dict)
-                    apply_prune(model, score_dict, threshold)
-            model = model.to(torch.device("cpu"))
-        elif args.algorithm == "synflow_repair":
-            device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
-            model = model.to(device)
-            example_data = torch.randn(1, 3, 224, 224)
-            sign_dict = linearize(model)
-            iterations = 10
-            for i in range(iterations):
-                for name, m in model.named_modules():
-                    if isinstance(m, nn.Conv2d):
-                        sn = torch.linalg.norm(
-                            m.weight.view(m.weight.shape[0], -1), ord=2
-                        ).item()
-                        m.weight.data /= sn
-                    elif isinstance(m, nn.Linear):
-                        sn = torch.linalg.norm(m.weight, ord=2).item()
-                        m.weight.data /= sn
-                prune_ratio = args.prune / iterations * (i + 1)
-                score_dict = synflow(model, example_data)
-                threshold = cal_threshold(score_dict, prune_ratio)
-                if i != iterations - 1:
-                    apply_prune(model, score_dict, threshold)
-                    remove_mask(model)
-                else:
-                    nonlinearize(model, sign_dict)
-                    apply_prune(model, score_dict, threshold)
-            model = model.to(torch.device("cpu"))
-        else:
-            for name, m in model.named_modules():
-                if isinstance(m, nn.Conv2d):
-                    prune.random_unstructured(m, name="weight", amount=args.prune)
-                elif isinstance(m, nn.Linear):
-                    prune.random_unstructured(m, name="weight", amount=args.prune)
-        print(f"Pruned Sparsity: {cal_sparsity(model)}")
-        # for name, m in model.named_modules():
-        #     if isinstance(m, (nn.Conv2d, nn.Linear)):
-        #         print(f"{name} sparsity: {cal_sparsity(m)}")
-
     if args.restore != 0:
         print("restoring !!!!")
         repair_model(model, args.restore)
 
-    torch.save(model, save_path + "/init.pt")
-
     world_size = args.world_size
     mp.spawn(
         parallel_main,
-        args=(world_size, args.port, trainset, testset, save_path),
+        args=(world_size, args.port, trainset, testset, save_path, model),
         nprocs=world_size,
         join=True,
     )
-    os.system(f"rm -rf {save_path}/init.pt")
