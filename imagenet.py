@@ -172,7 +172,7 @@ def train(
     trainloader = DataLoaderX(
         trainset,
         batch_size=128,
-        num_workers=16,
+        num_workers=8,
         pin_memory=True,
         sampler=train_datasampler,
     )
@@ -183,7 +183,7 @@ def train(
         testloader = DataLoaderX(
             testset,
             batch_size=128 * 4,
-            num_workers=4,
+            num_workers=16,
             pin_memory=True,
         )
     # Training loop
