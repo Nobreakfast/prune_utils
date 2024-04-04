@@ -39,31 +39,13 @@ def init_parallel(rank, world_size, port):
     )
 
 
-def parallel_main(
-    rank,
-    world_size,
-    port,
-    trainset,
-    testset,
-    save_path,
-    model,
-):
+def parallel_main(rank, world_size, port, trainset, testset, save_path, model, args):
     init_parallel(rank, world_size, port)
 
-    train(
-        trainset,
-        testset,
-        save_path,
-        model,
-    )
+    train(trainset, testset, save_path, model, args)
 
 
-def train(
-    trainset,
-    testset,
-    save_path,
-    model,
-):
+def train(trainset, testset, save_path, model, args):
     rank = dist.get_rank()
     if rank == 0:
         writer = SummaryWriter(log_dir=save_path)
@@ -328,7 +310,7 @@ if __name__ == "__main__":
     world_size = args.world_size
     mp.spawn(
         parallel_main,
-        args=(world_size, args.port, trainset, testset, save_path, model),
+        args=(world_size, args.port, trainset, testset, save_path, model, args),
         nprocs=world_size,
         join=True,
     )
