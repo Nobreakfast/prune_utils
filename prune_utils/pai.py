@@ -137,10 +137,41 @@ def cal_sparsity(model):
     return num_zeros / num_elements
 
 
+def get_lw_sparsity(model):
+    """
+    get layer-wise sparsity
+    """
+    sparsity_dict = {}
+    for name, module in model.named_modules():
+        if isinstance(module, (nn.Conv2d, nn.Linear)):
+            num_zeros = module.weight.data.numel() - module.weight.data.nonzero().size(
+                0
+            )
+            # num_elements = module.weight.data.numel()
+            sparsity_dict[name] = num_zeros  # / num_elements
+    return sparsity_dict
+
+
 def remove_mask(model):
     for name, module in model.named_modules():
         if isinstance(module, (nn.Conv2d, nn.Linear)):
             prune.remove(module, "weight")
+
+
+def get_mask(model):
+    mask_dict = {}
+    for name, module in model.named_modules():
+        if isinstance(module, (nn.Conv2d, nn.Linear)):
+            mask_dict[name] = module.weight_mask
+    return mask_dict
+
+
+def get_weight(model):
+    weight_dict = {}
+    for name, module in model.named_modules():
+        if isinstance(module, (nn.Conv2d, nn.Linear)):
+            weight_dict[name] = module.weight.data
+    return weight_dict
 
 
 if __name__ == "__main__":
@@ -156,12 +187,12 @@ if __name__ == "__main__":
             x = self.conv2(x)
             return x
 
-    model = fake_model()
-    print(cal_sparsity(model))
-    score_dict = rand(model)
-    threshold = cal_threshold(score_dict, 0.5)
-    apply_prune(model, score_dict, threshold)
-    print(cal_sparsity(model))
+    # model = fake_model()
+    # print(cal_sparsity(model))
+    # score_dict = rand(model)
+    # threshold = cal_threshold(score_dict, 0.5)
+    # apply_prune(model, score_dict, threshold)
+    # print(cal_sparsity(model))
 
     # fake datasets with input and fake labels
     train_loader = torch.utils.data.DataLoader(
@@ -174,8 +205,21 @@ if __name__ == "__main__":
     # apply_prune(model, score_dict, threshold)
     # print(cal_sparsity(model))
 
+    # model = fake_model()
+    # score_dict = synflow(model, train_loader)
+    # threshold = cal_threshold(score_dict, 0.5)
+    # apply_prune(model, score_dict, threshold)
+    # print(cal_sparsity(model))
+
     model = fake_model()
-    score_dict = synflow(model, train_loader)
+    score_dict = randn(model)
     threshold = cal_threshold(score_dict, 0.5)
     apply_prune(model, score_dict, threshold)
-    print(cal_sparsity(model))
+    mask_dict = get_mask(model)
+    remove_mask(model)
+    print(mask_dict["conv1"][0, 0, :, :])
+
+    model = fake_model()
+    print(model.conv1.weight[0, 0, :, :])
+    apply_prune(model, mask_dict, 1)
+    print(model.conv1.weight[0, 0, :, :])

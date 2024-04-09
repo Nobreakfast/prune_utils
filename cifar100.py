@@ -45,6 +45,12 @@ if __name__ == "__main__":
         help="model",
         default=None,
     )
+    parser.add_argument(
+        "--ablation",
+        help="ablation",
+        type=int,  # 1: reinit, 2: init, 3: shuffle, 4: invert
+        default=0,
+    )
     args = parser.parse_args()
 
     # Set up TensorBoard writer with log directory
@@ -96,6 +102,8 @@ if __name__ == "__main__":
         model = lsuv_with_dataloader(model, trainloader, device=device)
     else:
         initialization(model, args.im)
+
+    weight_dict = get_weight(model)
 
     if args.prune != 0.0:
         print(f"Original Sparsity: {cal_sparsity(model)}%")
@@ -173,6 +181,31 @@ if __name__ == "__main__":
     if args.restore != 0:
         print("restoring !!!!")
         repair_model_vgg(model, args.restore)
+
+    if args.ablation != 0:
+        if args.ablation == 1:
+            print("reinit")
+            mask_dict = get_mask(model)
+            remove_mask(model)
+            initialization(model, "kaiming_in")
+            apply_prune(model, mask_dict, 1)
+        elif args.ablation == 2:
+            print("init")
+            lw_dict = get_lw_sparsity(model)
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear)):
+                    module.weight_mask.data = torch.ones_like(module.weight)
+                    module.weight_orig.data = weight_dict[name]
+                    module.weight.data = module.weight_orig.data * module.weight_mask
+                    prune.l1_unstructured(module, name="weight", amount=lw_dict[name])
+        elif args.ablation == 3:
+            print("shuffle")
+            lw_dict = get_lw_sparsity(model)
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear)):
+                    module.weight_orig.data = weight_dict[name]
+                    module.weight.data = module.weight_orig.data * module.weight_mask
+        print(f"Ablation {args.ablation} Sparsity: {cal_sparsity(model)}")
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()

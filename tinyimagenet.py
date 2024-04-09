@@ -46,6 +46,12 @@ if __name__ == "__main__":
         type=float,
         default=1,
     )
+    parser.add_argument(
+        "--ablation",
+        help="ablation",
+        type=int,  # 1: reinit, 2: init, 3: shuffle, 4: invert
+        default=0,
+    )
     args = parser.parse_args()
 
     # Set up TensorBoard writer with log directory
@@ -95,6 +101,8 @@ if __name__ == "__main__":
     else:
         initialization(model, args.im)
 
+    weight_dict = get_weight(model)
+
     if args.prune != 0.0:
         print(f"Original Sparsity: {cal_sparsity(model)}%")
         if args.algorithm == "rand":
@@ -141,7 +149,7 @@ if __name__ == "__main__":
             model = model.to(device)
             example_data = torch.randn(1, 3, 64, 64)
             sign_dict = linearize(model)
-            iterations = 10
+            iterations = 100
             for i in range(iterations):
                 for name, m in model.named_modules():
                     if isinstance(m, nn.Conv2d):
@@ -176,6 +184,31 @@ if __name__ == "__main__":
     if args.restore != 0:
         print("restoring !!!!")
         repair_model(model, args.restore)
+
+    if args.ablation != 0:
+        if args.ablation == 1:
+            print("reinit")
+            mask_dict = get_mask(model)
+            remove_mask(model)
+            initialization(model, "kaiming_in")
+            apply_prune(model, mask_dict, 1)
+        elif args.ablation == 2:
+            print("init")
+            lw_dict = get_lw_sparsity(model)
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear)):
+                    module.weight_mask.data = torch.ones_like(module.weight)
+                    module.weight_orig.data = weight_dict[name]
+                    module.weight.data = module.weight_orig.data * module.weight_mask
+                    prune.l1_unstructured(module, name="weight", amount=lw_dict[name])
+        elif args.ablation == 3:
+            print("shuffle")
+            lw_dict = get_lw_sparsity(model)
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear)):
+                    module.weight_orig.data = weight_dict[name]
+                    module.weight.data = module.weight_orig.data * module.weight_mask
+        print(f"Ablation {args.ablation} Sparsity: {cal_sparsity(model)}")
 
     device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
     model = model.to(device)

@@ -10,6 +10,7 @@ import tqdm
 from prune_utils.pai import *
 from prune_utils.repair import repair_model
 from prune_utils.initial import initialization
+from data.core.dataloader import DataLoaderX
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -47,6 +48,12 @@ if __name__ == "__main__":
         type=float,
         default=1.0,
     )
+    parser.add_argument(
+        "--ablation",
+        help="ablation",
+        type=int,  # 1: reinit, 2: init, 3: shuffle, 4: invert
+        default=0,
+    )
 
     args = parser.parse_args()
 
@@ -74,14 +81,14 @@ if __name__ == "__main__":
     trainset = torchvision.datasets.CIFAR10(
         root="~/Data/cifar10", train=True, download=True, transform=transform_train
     )
-    trainloader = torch.utils.data.DataLoader(
+    trainloader = DataLoaderX(
         trainset, batch_size=256, shuffle=True, num_workers=4, pin_memory=True
     )
 
     testset = torchvision.datasets.CIFAR10(
         root="~/Data/cifar10", train=False, download=True, transform=transform_test
     )
-    testloader = torch.utils.data.DataLoader(
+    testloader = DataLoaderX(
         testset, batch_size=256, shuffle=False, num_workers=4, pin_memory=True
     )
 
@@ -101,6 +108,10 @@ if __name__ == "__main__":
         from models.resnet_ori import resnet18
 
         model = resnet18(num_classes=10)
+    elif args.model == "resnet50":
+        from models.resnet_ori import resnet50
+
+        model = resnet50(num_classes=10)
     elif args.model == "resnet101":
         from models.resnet_ori import resnet101
 
@@ -151,6 +162,8 @@ if __name__ == "__main__":
     else:
         initialization(model, args.im)
 
+    weight_dict = get_weight(model)
+
     if args.prune != 0.0:
         print(f"Original Sparsity: {cal_sparsity(model)}")
         if args.algorithm == "rand":
@@ -190,7 +203,7 @@ if __name__ == "__main__":
             model = model.to(device)
             example_data = torch.randn(1, 3, 32, 32)
             sign_dict = linearize(model)
-            iterations = 10
+            iterations = 100
             for i in range(iterations):
                 for module in model.modules():
                     if isinstance(module, nn.Conv2d):
@@ -220,13 +233,38 @@ if __name__ == "__main__":
                 elif isinstance(m, nn.Linear):
                     prune.random_unstructured(m, name="weight", amount=args.prune)
         print(f"Pruned Sparsity: {cal_sparsity(model)}")
-        for name, m in model.named_modules():
-            if isinstance(m, (nn.Conv2d, nn.Linear)):
-                print(f"{name} sparsity: {cal_sparsity(m)}")
+        # for name, m in model.named_modules():
+        #     if isinstance(m, (nn.Conv2d, nn.Linear)):
+        #         print(f"{name} sparsity: {cal_sparsity(m)}")
 
     if args.restore != 0:
         print("restoring !!!!")
         repair_model(model, args.restore)
+
+    if args.ablation != 0:
+        if args.ablation == 1:
+            print("reinit")
+            mask_dict = get_mask(model)
+            remove_mask(model)
+            initialization(model, "kaiming_in")
+            apply_prune(model, mask_dict, 1)
+        elif args.ablation == 2:
+            print("init")
+            lw_dict = get_lw_sparsity(model)
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear)):
+                    module.weight_mask.data = torch.ones_like(module.weight)
+                    module.weight_orig.data = weight_dict[name]
+                    module.weight.data = module.weight_orig.data * module.weight_mask
+                    prune.l1_unstructured(module, name="weight", amount=lw_dict[name])
+        elif args.ablation == 3:
+            print("shuffle")
+            lw_dict = get_lw_sparsity(model)
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear)):
+                    module.weight_orig.data = weight_dict[name]
+                    module.weight.data = module.weight_orig.data * module.weight_mask
+        print(f"Ablation {args.ablation} Sparsity: {cal_sparsity(model)}")
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()

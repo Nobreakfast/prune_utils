@@ -53,6 +53,27 @@ def train(trainset, testset, save_path, model, args):
         writer = None
         testset = None
 
+    if args.im == "lsuv":
+        from lsuv import lsuv_with_dataloader
+
+        device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
+        model = model.to(device)
+        model = lsuv_with_dataloader(model, trainloader, device=device)
+    elif args.im == "lipz":
+        initialization(model, "kaiming_in")
+        repair_model(model, 1)
+    elif args.im == "rei":
+        initialization(model, "kaiming_in")
+        repair_model(model, 3)
+    else:
+        initialization(model, args.im)
+
+    weight_dict = get_weight(model)
+
+    if args.restore != 0:
+        print("restoring !!!!")
+        repair_model(model, args.restore)
+
     if args.prune != 0.0:
         print(f"Original Sparsity: {cal_sparsity(model)}%")
         if args.algorithm == "rand":
@@ -139,6 +160,32 @@ def train(trainset, testset, save_path, model, args):
 
     device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
+
+    if args.ablation != 0:
+        if args.ablation == 1:
+            print("reinit")
+            mask_dict = get_mask(model)
+            remove_mask(model)
+            initialization(model, "kaiming_in")
+            apply_prune(model, mask_dict, 1)
+        elif args.ablation == 2:
+            print("init")
+            lw_dict = get_lw_sparsity(model)
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear)):
+                    module.weight_mask.data = torch.ones_like(module.weight)
+                    module.weight_orig.data = weight_dict[name]
+                    module.weight.data = module.weight_orig.data * module.weight_mask
+                    prune.l1_unstructured(module, name="weight", amount=lw_dict[name])
+        elif args.ablation == 3:
+            print("shuffle")
+            lw_dict = get_lw_sparsity(model)
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear)):
+                    module.weight_orig.data = weight_dict[name]
+                    module.weight.data = module.weight_orig.data * module.weight_mask
+        print(f"Ablation {args.ablation} Sparsity: {cal_sparsity(model)}")
+
     model = DDP(model, device_ids=[rank])
 
     criterion = nn.CrossEntropyLoss()
@@ -273,6 +320,12 @@ if __name__ == "__main__":
         type=float,
         default=1,
     )
+    parser.add_argument(
+        "--ablation",
+        help="ablation",
+        type=int,  # 1: reinit, 2: init, 3: shuffle, 4: invert
+        default=0,
+    )
     args = parser.parse_args()
 
     # Set up TensorBoard writer with log directory
@@ -287,25 +340,6 @@ if __name__ == "__main__":
         model = resnet50(num_classes=1000)
     else:
         raise ValueError("model not found")
-
-    if args.im == "lsuv":
-        from lsuv import lsuv_with_dataloader
-
-        device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
-        model = model.to(device)
-        model = lsuv_with_dataloader(model, trainloader, device=device)
-    elif args.im == "lipz":
-        initialization(model, "kaiming_in")
-        repair_model(model, 1)
-    elif args.im == "rei":
-        initialization(model, "kaiming_in")
-        repair_model(model, 3)
-    else:
-        initialization(model, args.im)
-
-    if args.restore != 0:
-        print("restoring !!!!")
-        repair_model(model, args.restore)
 
     world_size = args.world_size
     mp.spawn(
