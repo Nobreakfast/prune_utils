@@ -144,7 +144,7 @@ if __name__ == "__main__":
                     nonlinearize(model, sign_dict)
                     apply_prune(model, score_dict, threshold)
             model = model.to(torch.device("cpu"))
-        elif args.algorithm == "synflow_repair":
+        elif args.algorithm == "resynflow":
             device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
             model = model.to(device)
             example_data = torch.randn(1, 3, 64, 64)
@@ -162,6 +162,9 @@ if __name__ == "__main__":
                         m.weight.data /= sn
                 prune_ratio = args.prune / iterations * (i + 1)
                 score_dict = synflow(model, example_data)
+                if args.ablation == 4:
+                    print("invert")
+                    score_dict = invert_score(score_dict)
                 threshold = cal_threshold(score_dict, prune_ratio)
                 if i != iterations - 1:
                     apply_prune(model, score_dict, threshold)

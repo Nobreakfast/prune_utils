@@ -174,6 +174,12 @@ def get_weight(model):
     return weight_dict
 
 
+def invert_score(score_dict):
+    for key in score_dict.keys():
+        score_dict[key] = -score_dict[key]
+    return score_dict
+
+
 if __name__ == "__main__":
 
     class fake_model(nn.Module):
