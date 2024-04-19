@@ -54,7 +54,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Set up TensorBoard writer with log directory
-    save_path = f"logs/cifar100/{args.model}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}/no.{args.save}"
+    save_path = f"logs/cifar100/{args.model}/{args.im}/{args.algorithm}/{args.prune:.2f}/r{args.restore}a{args.ablation}/no.{args.save}"
     writer = SummaryWriter(log_dir=save_path)
 
     # Load CIFAR-10 dataset
@@ -206,6 +206,12 @@ if __name__ == "__main__":
             apply_prune(model, mask_dict, 1)
         elif args.ablation == 2:
             print("init")
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear)):
+                    module.weight_orig.data = weight_dict[name]
+                    module.weight.data = module.weight_orig.data * module.weight_mask
+        elif args.ablation == 3:
+            print("shuffle")
             lw_dict = get_lw_sparsity(model)
             for name, module in model.named_modules():
                 if isinstance(module, (nn.Conv2d, nn.Linear)):
@@ -214,14 +220,9 @@ if __name__ == "__main__":
                     )
                     module.weight_orig.data = weight_dict[name]
                     module.weight.data = module.weight_orig.data * module.weight_mask
-                    prune.l1_unstructured(module, name="weight", amount=lw_dict[name])
-        elif args.ablation == 3:
-            print("shuffle")
-            lw_dict = get_lw_sparsity(model)
-            for name, module in model.named_modules():
-                if isinstance(module, (nn.Conv2d, nn.Linear)):
-                    module.weight_orig.data = weight_dict[name]
-                    module.weight.data = module.weight_orig.data * module.weight_mask
+                    prune.random_unstructured(
+                        module, name="weight", amount=lw_dict[name]
+                    )
         elif args.ablation == 4:
             print("plsr")
             lw_dict = get_lw_sparsity(model)
