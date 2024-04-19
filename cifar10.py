@@ -51,7 +51,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ablation",
         help="ablation",
-        type=int,  # 1: reinit, 2: init, 3: shuffle, 4: invert
+        type=int,  # 1: reinit, 2: init, 3: shuffle, 4: plsr
         default=0,
     )
 
@@ -273,6 +273,17 @@ if __name__ == "__main__":
                 if isinstance(module, (nn.Conv2d, nn.Linear)):
                     module.weight_orig.data = weight_dict[name]
                     module.weight.data = module.weight_orig.data * module.weight_mask
+        elif args.ablation == 4:
+            print("plsr")
+            lw_dict = get_lw_sparsity(model)
+            remove_mask(model)
+            model.load_state_dict(
+                torch.load("pretrained/cifar10_resnet20.pth", torch.device("cpu"))
+            )
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear)):
+                    prune.l1_unstructured(module, name="weight", amount=lw_dict[name])
+
         print(f"Ablation {args.ablation} Sparsity: {cal_sparsity(model)}")
 
     model.to(device)
