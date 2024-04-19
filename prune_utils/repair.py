@@ -22,32 +22,84 @@ def repair_model_vgg(model, restore):
         B = True
     elif restore == 3:
         W, B = True, True
-    elif restore == 11:  # restore to the original distribution
-        raise NotImplementedError
-    elif restore == 12:  # restore saved to the original distribution
-        raise NotImplementedError
-    elif restore == 13:  # restore to the EOC
-        raise NotImplementedError
-    elif restore == 14:  # restore saved to the EOC
-        raise NotImplementedError
-    elif restore == 15:  # restore to fixup
-        raise NotImplementedError
-    elif restore == 17:  # Random walk
-        raise NotImplementedError
-    elif restore == 18:  # Random walk saved
-        raise NotImplementedError
-    elif restore == 19:  # Hints initialization
-        raise NotImplementedError
-    elif restore == 20:  # Hints initialization saved
-        raise NotImplementedError
-    elif restore == 21:  # orthogonal initialization
-        raise NotImplementedError
-    elif restore == 22:  # orthogonal initialization saved
-        raise NotImplementedError
-    elif restore == 23:  # spectrum initialization
-        raise NotImplementedError
-    elif restore == 24:  # spectrum initialization saved
-        raise NotImplementedError
+    elif restore == 12:  # restore to kaiming in
+        for n, m in model.named_modules():
+            if isinstance(m, nn.Conv2d):
+                # new module weight
+                shape = m.weight_orig.data[m.weight_mask == 1].shape
+                m.weight_orig.data[m.weight_mask == 1] = torch.randn(shape)
+                # m.weight_orig.data[m.weight_mask == 0] = 0
+                m.weight.data = m.weight_orig * m.weight_mask
+                # restore variance
+                w_shape = m.weight.shape
+                aimed_var = 2 / (w_shape[1] * w_shape[2] * w_shape[3])
+                cur_var = m.weight.var().item()
+                m.weight_orig.data *= sqrt(aimed_var / cur_var)
+                m.weight.data = m.weight_orig * m.weight_mask
+            elif isinstance(m, nn.Linear):
+                # new module weight
+                shape = m.weight_orig.data[m.weight_mask == 1].shape
+                m.weight_orig.data[m.weight_mask == 1] = torch.randn(shape)
+                # m.weight_orig.data[m.weight_mask == 0] = 0
+                m.weight.data = m.weight_orig * m.weight_mask
+                # restore variance
+                w_shape = m.weight.shape
+                aimed_var = 2 / w_shape[1]
+                cur_var = m.weight.var().item()
+                m.weight_orig.data *= sqrt(aimed_var / cur_var)
+                m.weight.data = m.weight_orig * m.weight_mask
+    elif restore == 14:  # restore to kaiming out
+        for n, m in model.named_modules():
+            if isinstance(m, nn.Conv2d):
+                # new module weight
+                shape = m.weight_orig.data[m.weight_mask == 1].shape
+                m.weight_orig.data[m.weight_mask == 1] = torch.randn(shape)
+                # m.weight_orig.data[m.weight_mask == 0] = 0
+                m.weight.data = m.weight_orig * m.weight_mask
+                # restore variance
+                w_shape = m.weight.shape
+                aimed_var = 2 / (w_shape[0] * w_shape[2] * w_shape[3])
+                cur_var = m.weight.var().item()
+                m.weight_orig.data *= sqrt(aimed_var / cur_var)
+                m.weight.data = m.weight_orig * m.weight_mask
+            elif isinstance(m, nn.Linear):
+                # new module weight
+                shape = m.weight_orig.data[m.weight_mask == 1].shape
+                m.weight_orig.data[m.weight_mask == 1] = torch.randn(shape)
+                # m.weight_orig.data[m.weight_mask == 0] = 0
+                m.weight.data = m.weight_orig * m.weight_mask
+                # restore variance
+                w_shape = m.weight.shape
+                aimed_var = 2 / w_shape[0]
+                cur_var = m.weight.var().item()
+                m.weight_orig.data *= sqrt(aimed_var / cur_var)
+                m.weight.data = m.weight_orig * m.weight_mask
+    elif restore == 16:  # restore to xavier
+        for n, m in model.named_modules():
+            if isinstance(m, nn.Conv2d):
+                # new module weight
+                shape = m.weight_orig.data[m.weight_mask == 1].shape
+                m.weight_orig.data[m.weight_mask == 1] = torch.randn(shape)
+                # m.weight_orig.data[m.weight_mask == 0] = 0
+                m.weight.data = m.weight_orig * m.weight_mask
+                # restore variance xaiver
+                w_shape = m.weight.shape
+                aimed_var = 4 / ((w_shape[1] + w_shape[0]) * w_shape[2] * w_shape[3])
+                cur_var = m.weight.var().item()
+                m.weight_orig.data *= sqrt(aimed_var / cur_var)
+                m.weight.data = m.weight_orig * m.weight_mask
+            elif isinstance(m, nn.Linear):
+                # new module weight
+                shape = m.weight_orig.data[m.weight_mask == 1].shape
+                m.weight_orig.data[m.weight_mask == 1] = torch.randn(shape)
+                # m.weight_orig.data[m.weight_mask == 0] = 0
+                m.weight.data = m.weight_orig * m.weight_mask
+                # restore variance
+                w_shape = m.weight.shape
+                aimed_var = 4 / (w_shape[1] + w_shape[0])
+                cur_var = m.weight.var().item()
+                m.weight_orig.data *= sqrt(aimed_var / cur_var)
+                m.weight.data = m.weight_orig * m.weight_mask
 
     if W or B:
         for n, m in model.named_modules():
@@ -95,34 +147,84 @@ def repair_model(model, restore):
         B = True
     elif restore == 3:
         W, B = True, True
-    elif restore == 11:  # restore to the original distribution
-        raise NotImplementedError
-    elif restore == 12:  # restore saved to the original distribution
-        raise NotImplementedError
-    elif restore == 13:  # restore to the EOC
-        raise NotImplementedError
-    elif restore == 14:  # restore saved to the EOC
-        raise NotImplementedError
-    elif restore == 15:  # restore to fixup
-        raise NotImplementedError
-    elif restore == 16:  # restore saved to fixup
-        raise NotImplementedError
-    elif restore == 17:  # Random walk
-        raise NotImplementedError
-    elif restore == 18:  # Random walk saved
-        raise NotImplementedError
-    elif restore == 19:  # Hints initialization
-        raise NotImplementedError
-    elif restore == 20:  # Hints initialization saved
-        raise NotImplementedError
-    elif restore == 21:  # orthogonal initialization
-        raise NotImplementedError
-    elif restore == 22:  # orthogonal initialization saved
-        raise NotImplementedError
-    elif restore == 23:  # spectrum initialization
-        raise NotImplementedError
-    elif restore == 24:  # spectrum initialization saved
-        raise NotImplementedError
+    elif restore == 12:  # restore to kaiming in
+        for n, m in model.named_modules():
+            if isinstance(m, nn.Conv2d):
+                # new module weight
+                shape = m.weight_orig.data[m.weight_mask == 1].shape
+                m.weight_orig.data[m.weight_mask == 1] = torch.randn(shape)
+                # m.weight_orig.data[m.weight_mask == 0] = 0
+                m.weight.data = m.weight_orig * m.weight_mask
+                # restore variance
+                w_shape = m.weight.shape
+                aimed_var = 2 / (w_shape[1] * w_shape[2] * w_shape[3])
+                cur_var = m.weight.var().item()
+                m.weight_orig.data *= sqrt(aimed_var / cur_var)
+                m.weight.data = m.weight_orig * m.weight_mask
+            elif isinstance(m, nn.Linear):
+                # new module weight
+                shape = m.weight_orig.data[m.weight_mask == 1].shape
+                m.weight_orig.data[m.weight_mask == 1] = torch.randn(shape)
+                # m.weight_orig.data[m.weight_mask == 0] = 0
+                m.weight.data = m.weight_orig * m.weight_mask
+                # restore variance
+                w_shape = m.weight.shape
+                aimed_var = 2 / w_shape[1]
+                cur_var = m.weight.var().item()
+                m.weight_orig.data *= sqrt(aimed_var / cur_var)
+                m.weight.data = m.weight_orig * m.weight_mask
+    elif restore == 14:  # restore to kaiming out
+        for n, m in model.named_modules():
+            if isinstance(m, nn.Conv2d):
+                # new module weight
+                shape = m.weight_orig.data[m.weight_mask == 1].shape
+                m.weight_orig.data[m.weight_mask == 1] = torch.randn(shape)
+                # m.weight_orig.data[m.weight_mask == 0] = 0
+                m.weight.data = m.weight_orig * m.weight_mask
+                # restore variance
+                w_shape = m.weight.shape
+                aimed_var = 2 / (w_shape[0] * w_shape[2] * w_shape[3])
+                cur_var = m.weight.var().item()
+                m.weight_orig.data *= sqrt(aimed_var / cur_var)
+                m.weight.data = m.weight_orig * m.weight_mask
+            elif isinstance(m, nn.Linear):
+                # new module weight
+                shape = m.weight_orig.data[m.weight_mask == 1].shape
+                m.weight_orig.data[m.weight_mask == 1] = torch.randn(shape)
+                # m.weight_orig.data[m.weight_mask == 0] = 0
+                m.weight.data = m.weight_orig * m.weight_mask
+                # restore variance
+                w_shape = m.weight.shape
+                aimed_var = 2 / w_shape[0]
+                cur_var = m.weight.var().item()
+                m.weight_orig.data *= sqrt(aimed_var / cur_var)
+                m.weight.data = m.weight_orig * m.weight_mask
+    elif restore == 16:  # restore to xavier
+        for n, m in model.named_modules():
+            if isinstance(m, nn.Conv2d):
+                # new module weight
+                shape = m.weight_orig.data[m.weight_mask == 1].shape
+                m.weight_orig.data[m.weight_mask == 1] = torch.randn(shape)
+                # m.weight_orig.data[m.weight_mask == 0] = 0
+                m.weight.data = m.weight_orig * m.weight_mask
+                # restore variance xaiver
+                w_shape = m.weight.shape
+                aimed_var = 4 / ((w_shape[1] + w_shape[0]) * w_shape[2] * w_shape[3])
+                cur_var = m.weight.var().item()
+                m.weight_orig.data *= sqrt(aimed_var / cur_var)
+                m.weight.data = m.weight_orig * m.weight_mask
+            elif isinstance(m, nn.Linear):
+                # new module weight
+                shape = m.weight_orig.data[m.weight_mask == 1].shape
+                m.weight_orig.data[m.weight_mask == 1] = torch.randn(shape)
+                # m.weight_orig.data[m.weight_mask == 0] = 0
+                m.weight.data = m.weight_orig * m.weight_mask
+                # restore variance
+                w_shape = m.weight.shape
+                aimed_var = 4 / (w_shape[1] + w_shape[0])
+                cur_var = m.weight.var().item()
+                m.weight_orig.data *= sqrt(aimed_var / cur_var)
+                m.weight.data = m.weight_orig * m.weight_mask
 
     if W or B:
         for n, m in model.named_modules():

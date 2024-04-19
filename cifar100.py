@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 import argparse
 import tqdm
 from prune_utils.pai import *
-from prune_utils.repair import repair_model_vgg
+from prune_utils.repair import repair_model_vgg, repair_model
 from prune_utils.initial import initialization
 from data.core.dataloader import DataLoaderX
 
@@ -91,6 +91,15 @@ if __name__ == "__main__":
         from models.vgg import vgg16_bn
 
         model = vgg16_bn()
+    elif args.model == "resnet32":
+        from models.resnet import resnet32
+
+        model = resnet32(num_classes=100)
+    elif args.model == "resnet50":
+        from models.resnet_ori import resnet50
+
+        model = resnet50(num_classes=100)
+
     else:
         raise ValueError("model not found")
 
@@ -144,7 +153,7 @@ if __name__ == "__main__":
             model = model.to(device)
             example_data = torch.randn(1, 3, 32, 32)
             sign_dict = linearize(model)
-            iterations = 100
+            iterations = 10
             for i in range(iterations):
                 for module in model.modules():
                     if isinstance(module, nn.Conv2d):
@@ -183,7 +192,10 @@ if __name__ == "__main__":
 
     if args.restore != 0:
         print("restoring !!!!")
-        repair_model_vgg(model, args.restore)
+        if args.model[:3] == "res":
+            model = repair_model(model, args.restore)
+        else:
+            repair_model_vgg(model, args.restore)
 
     if args.ablation != 0:
         if args.ablation == 1:
@@ -197,7 +209,9 @@ if __name__ == "__main__":
             lw_dict = get_lw_sparsity(model)
             for name, module in model.named_modules():
                 if isinstance(module, (nn.Conv2d, nn.Linear)):
-                    module.weight_mask.data = torch.ones_like(module.weight)
+                    module.weight_mask.data = torch.ones_like(module.weight).to(
+                        torch.device("cpu")
+                    )
                     module.weight_orig.data = weight_dict[name]
                     module.weight.data = module.weight_orig.data * module.weight_mask
                     prune.l1_unstructured(module, name="weight", amount=lw_dict[name])

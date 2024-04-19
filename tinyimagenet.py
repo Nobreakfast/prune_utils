@@ -83,6 +83,14 @@ if __name__ == "__main__":
         from models.resnet_ori_res import resnet18
 
         model = resnet18(num_classes=200, alpha=args.alpha, beta=args.beta)
+    elif args.model == "resnet32":
+        from models.resnet import resnet32
+
+        model = resnet32(num_classes=200)
+    elif args.model == "resnet50":
+        from models.resnet_ori import resnet50
+
+        model = resnet50(num_classes=200)
     else:
         raise ValueError("model not found")
 
@@ -149,7 +157,7 @@ if __name__ == "__main__":
             model = model.to(device)
             example_data = torch.randn(1, 3, 64, 64)
             sign_dict = linearize(model)
-            iterations = 100
+            iterations = 10
             for i in range(iterations):
                 for name, m in model.named_modules():
                     if isinstance(m, nn.Conv2d):
@@ -200,7 +208,9 @@ if __name__ == "__main__":
             lw_dict = get_lw_sparsity(model)
             for name, module in model.named_modules():
                 if isinstance(module, (nn.Conv2d, nn.Linear)):
-                    module.weight_mask.data = torch.ones_like(module.weight)
+                    module.weight_mask.data = torch.ones_like(module.weight).to(
+                        torch.device("cpu")
+                    )
                     module.weight_orig.data = weight_dict[name]
                     module.weight.data = module.weight_orig.data * module.weight_mask
                     prune.l1_unstructured(module, name="weight", amount=lw_dict[name])
