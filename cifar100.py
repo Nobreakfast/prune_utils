@@ -170,7 +170,7 @@ if __name__ == "__main__":
                 score_dict = synflow(model, example_data)
                 # if args.ablation == 4:
                 #     print("invert")
-                    score_dict = invert_score(score_dict)
+                #     score_dict = invert_score(score_dict)
                 threshold = cal_threshold(score_dict, prune_ratio)
                 if i != iterations - 1:
                     apply_prune(model, score_dict, threshold)
